@@ -1,0 +1,818 @@
+import { ReminderKind, TaskStatus, UserRole } from "@prisma/client";
+import { endOfDay, startOfDay, subDays } from "date-fns";
+import { db } from "@/lib/db";
+import {
+  calculateDailyRate,
+  calculateHourlyRate,
+  calculateMinutesBetween,
+  calculateOvertimeMinutes,
+  calculateRegularMinutes,
+  calculateWeeklyRate,
+  calculateWorkValue,
+  formatHours,
+  toDateOnly,
+} from "@/lib/utils";
+
+const DEPARTMENT_TASK_TEMPLATES: Array<{
+  matches: string[];
+  suggestions: Array<{ title: string; description: string; priority: "low" | "normal" | "high" | "critical" }>;
+}> = [
+  {
+    matches: ["it", "technology"],
+    suggestions: [
+      { title: "Review support tickets and unblock critical issues", description: "Check new IT requests, resolve blockers, and escalate urgent cases.", priority: "high" },
+      { title: "Deploy and verify application updates", description: "Review pending changes, push approved updates, and monitor health after release.", priority: "high" },
+      { title: "Audit infrastructure and backup status", description: "Confirm backups, server alerts, and security checks are green for the day.", priority: "normal" },
+    ],
+  },
+  {
+    matches: ["sales"],
+    suggestions: [
+      { title: "Follow up with active leads and proposals", description: "Contact warm prospects, update deal notes, and move pending proposals forward.", priority: "high" },
+      { title: "Prepare sales pipeline status update", description: "Summarize conversions, pending deals, and revenue focus points for leadership.", priority: "normal" },
+      { title: "Review client meeting outcomes", description: "Capture commitments, next actions, and ownership from recent client calls.", priority: "normal" },
+    ],
+  },
+  {
+    matches: ["hr"],
+    suggestions: [
+      { title: "Review attendance, leave, and employee requests", description: "Check daily people operations queue and resolve pending workforce actions.", priority: "high" },
+      { title: "Publish HR updates and policy reminders", description: "Share important internal updates and confirm department visibility.", priority: "normal" },
+      { title: "Screen hiring pipeline and shortlist candidates", description: "Review new applicants, shortlist matches, and schedule next steps.", priority: "normal" },
+    ],
+  },
+  {
+    matches: ["purchase", "procurement"],
+    suggestions: [
+      { title: "Verify vendor quotations and approvals", description: "Review open purchase requests, vendor responses, and approval blockers.", priority: "high" },
+      { title: "Track pending purchase orders", description: "Follow up on timelines, delivery commitments, and purchasing exceptions.", priority: "normal" },
+      { title: "Update procurement summary for management", description: "Prepare a concise summary of current purchasing status and risks.", priority: "normal" },
+    ],
+  },
+  {
+    matches: ["accounts", "finance"],
+    suggestions: [
+      { title: "Reconcile transactions and ledger updates", description: "Verify entries, close pending mismatches, and confirm daily financial accuracy.", priority: "high" },
+      { title: "Review payable and receivable priorities", description: "Track due payments, incoming collections, and financial action points.", priority: "normal" },
+      { title: "Prepare finance status note for leadership", description: "Summarize key balances, exceptions, and urgent items for the day.", priority: "normal" },
+    ],
+  },
+  {
+    matches: ["operations"],
+    suggestions: [
+      { title: "Review daily operations queue and blockers", description: "Check running workstreams, pending tasks, and process exceptions.", priority: "high" },
+      { title: "Coordinate cross-team action items", description: "Follow up with departments and keep operational commitments on track.", priority: "normal" },
+      { title: "Update operations dashboard and deadlines", description: "Confirm delivery progress, deadlines, and execution risks.", priority: "normal" },
+    ],
+  },
+];
+
+export async function getDepartments() {
+  return db.department.findMany({ orderBy: { name: "asc" } });
+}
+
+export async function getDashboardData(userId: string, role: UserRole, departmentId?: string | null) {
+  const today = new Date();
+  const dayStart = startOfDay(today);
+  const dayEnd = endOfDay(today);
+
+  const taskWhere =
+    role === UserRole.employee
+      ? { userId, planDate: { gte: dayStart, lte: dayEnd } }
+      : role === UserRole.manager && departmentId
+        ? { departmentId, planDate: { gte: dayStart, lte: dayEnd } }
+        : { planDate: { gte: dayStart, lte: dayEnd } };
+
+  const [tasks, activeStaff] = await Promise.all([
+    db.dailyTask.findMany({
+      where: taskWhere,
+      include: {
+        user: { include: { department: true } },
+        updates: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.user.count({
+      where:
+        role === UserRole.admin
+          ? {
+              isActive: true,
+              role: {
+                in: [UserRole.employee, UserRole.hr, UserRole.manager],
+              },
+            }
+          : departmentId
+            ? {
+                isActive: true,
+                departmentId,
+                role: {
+                  in: [UserRole.employee, UserRole.hr, UserRole.manager],
+                },
+              }
+            : {
+                isActive: true,
+                id: userId,
+              },
+    }),
+  ]);
+
+  const reportsSubmitted = tasks.filter((task) => task.updates.some((item) => toDateOnly(item.reportDate) === toDateOnly(today))).length;
+  const trackedMinutes = tasks.reduce((sum, task) => {
+    const todayUpdates = task.updates.filter((item) => toDateOnly(item.reportDate) === toDateOnly(today));
+    return sum + todayUpdates.reduce((inner, update) => inner + update.trackedMinutes, 0);
+  }, 0);
+  const pendingItems = tasks.filter(
+    (task) =>
+      task.updates.find((update) => toDateOnly(update.reportDate) === toDateOnly(today))?.status !== TaskStatus.done,
+  ).length;
+
+  const recentTrend = await Promise.all(
+    Array.from({ length: 7 }).map(async (_, index) => {
+      const date = subDays(today, 6 - index);
+      const count = await db.dailyTask.count({
+        where: {
+          ...(role === UserRole.employee ? { userId } : {}),
+          ...(role === UserRole.manager && departmentId ? { departmentId } : {}),
+          planDate: { gte: startOfDay(date), lte: endOfDay(date) },
+        },
+      });
+
+      return { date: toDateOnly(date), count };
+    }),
+  );
+
+  return {
+    kpis: {
+      activeStaff,
+      tasksPlanned: tasks.length,
+      reportsSubmitted,
+      worklogHours: formatHours(trackedMinutes),
+      pendingItems,
+    },
+    tasks,
+    recentTrend,
+  };
+}
+
+export async function getPlanWithReports(userId: string, date = new Date()) {
+  const day = toDateOnly(date);
+  return db.dailyTask.findMany({
+    where: {
+      userId,
+      planDate: new Date(day),
+    },
+    include: {
+      updates: true,
+      department: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function canUserEditReportDate(
+  user: { id: string; role: UserRole },
+  planDate: Date,
+  taskIds: string[],
+) {
+  if (user.role === UserRole.manager || user.role === UserRole.admin) {
+    return { allowed: true, mode: "direct" as const };
+  }
+
+  if (toDateOnly(planDate) === toDateOnly()) {
+    return { allowed: true, mode: "today" as const };
+  }
+
+  if (!taskIds.length) {
+    return { allowed: false, mode: "none" as const };
+  }
+
+  const approvedCount = await db.reportEditRequest.count({
+    where: {
+      dailyTaskId: { in: taskIds },
+      requestedById: user.id,
+      status: "approved",
+    },
+  });
+
+  return {
+    allowed: approvedCount === taskIds.length,
+    mode: approvedCount === taskIds.length ? ("approved" as const) : ("locked" as const),
+  };
+}
+
+export async function getPlanSuggestions(userId: string, departmentId?: string | null) {
+  const [department, recentTasks] = await Promise.all([
+    departmentId
+      ? db.department.findUnique({
+          where: { id: departmentId },
+        })
+      : Promise.resolve(null),
+    db.dailyTask.findMany({
+      where: { userId },
+      include: { department: true, updates: true },
+      orderBy: [{ planDate: "desc" }, { createdAt: "desc" }],
+      take: 90,
+    }),
+  ]);
+
+  const departmentName = department?.name.toLowerCase() ?? "";
+  const departmentTemplates =
+    DEPARTMENT_TASK_TEMPLATES.find((entry) => entry.matches.some((match) => departmentName.includes(match)))?.suggestions ?? [];
+  const currentWeekday = new Date().getDay();
+
+  const candidateTasks = recentTasks.filter((task) => !departmentId || task.departmentId === departmentId);
+  const scoredHistory = Array.from(
+    candidateTasks.reduce((map, task, index) => {
+      const key = task.taskTitle.trim().toLowerCase();
+      const existing = map.get(key) ?? {
+        title: task.taskTitle,
+        description: task.taskDescription ?? "Predicted from your work pattern and completion history.",
+        priority: (["low", "normal", "high", "critical"].includes(task.priority) ? task.priority : "normal") as "low" | "normal" | "high" | "critical",
+        score: 0,
+        count: 0,
+        completedCount: 0,
+        latestIndex: index,
+        sameWeekdayCount: 0,
+      };
+
+      const latestStatus = task.updates[0]?.status;
+      const recencyBoost = Math.max(0, 12 - index);
+      const completionBoost = latestStatus === TaskStatus.done ? 10 : latestStatus === TaskStatus.in_progress ? 5 : 2;
+      const weekdayBoost = new Date(task.planDate).getDay() === currentWeekday ? 6 : 0;
+
+      existing.count += 1;
+      existing.completedCount += latestStatus === TaskStatus.done ? 1 : 0;
+      existing.sameWeekdayCount += weekdayBoost ? 1 : 0;
+      existing.latestIndex = Math.min(existing.latestIndex, index);
+      existing.score += recencyBoost + completionBoost + weekdayBoost + (task.departmentId === departmentId ? 4 : 0);
+
+      map.set(key, existing);
+      return map;
+    }, new Map<string, {
+      title: string;
+      description: string;
+      priority: "low" | "normal" | "high" | "critical";
+      score: number;
+      count: number;
+      completedCount: number;
+      latestIndex: number;
+      sameWeekdayCount: number;
+    }>()).values(),
+  )
+    .map((item) => ({
+      title: item.title,
+      description:
+        item.description ||
+        `Predicted from ${item.completedCount || item.count} earlier worklogs in ${department?.name ?? "this department"}.`,
+      priority: item.priority,
+      source:
+        item.sameWeekdayCount > 0
+          ? `Pattern repeat · same weekday ${item.sameWeekdayCount}x`
+          : `History repeat · used ${item.count}x`,
+      score: item.score + item.count * 3 + item.completedCount * 4,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
+
+  const templateSuggestions = departmentTemplates.map((task, index) => ({
+    title: task.title,
+    description: `${task.description} Suggested from ${department?.name ?? "department"} workflow baseline.`,
+    priority: task.priority,
+    source: `Department intelligence ${index + 1}`,
+    score: 10 - index,
+  }));
+
+  return [...scoredHistory, ...templateSuggestions]
+    .filter(
+      (item, index, array) =>
+        array.findIndex((candidate) => candidate.title.trim().toLowerCase() === item.title.trim().toLowerCase()) === index,
+    )
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map((item) => ({
+      title: item.title,
+      description: item.description,
+      priority: item.priority,
+      source: item.source,
+    }));
+}
+
+export async function getHistoryData(userId: string, from?: string, to?: string) {
+  const start = from ? new Date(from) : subDays(new Date(), 7);
+  const end = to ? new Date(to) : new Date();
+
+  const [tasks, editRequests] = await Promise.all([
+    db.dailyTask.findMany({
+      where: {
+        userId,
+        planDate: {
+          gte: startOfDay(start),
+          lte: endOfDay(end),
+        },
+      },
+      include: {
+        department: true,
+        updates: true,
+      },
+      orderBy: [{ planDate: "desc" }, { createdAt: "desc" }],
+    }),
+    db.reportEditRequest.findMany({
+      where: {
+        requestedById: userId,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  return tasks.map((task) => {
+    const latestRequest = editRequests.find((request) => request.dailyTaskId === task.id) ?? null;
+    const isToday = toDateOnly(task.planDate) === toDateOnly();
+    const approved = latestRequest?.status === "approved";
+
+    return {
+      ...task,
+      latestRequest,
+      isToday,
+      canEmployeeEdit: isToday || approved,
+      canRequestEdit: !isToday && !approved,
+    };
+  });
+}
+
+export async function getPendingReportEditRequests(reviewer: {
+  id: string;
+  role: UserRole;
+  departmentId?: string | null;
+}) {
+  if (reviewer.role !== UserRole.manager) {
+    return [];
+  }
+
+  return db.reportEditRequest.findMany({
+    where: {
+      status: "pending",
+      dailyTask: reviewer.departmentId ? { departmentId: reviewer.departmentId } : undefined,
+    },
+    include: {
+      requestedBy: {
+        include: {
+          department: true,
+        },
+      },
+      dailyTask: {
+        include: {
+          department: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+  });
+}
+
+export async function getTeamData(role: UserRole, departmentId?: string | null) {
+  const today = toDateOnly();
+
+  const tasks = await db.dailyTask.findMany({
+    where: {
+      ...(role === UserRole.manager && departmentId ? { departmentId } : {}),
+      planDate: new Date(today),
+    },
+    include: {
+      department: true,
+      user: true,
+      updates: true,
+    },
+    orderBy: [{ department: { name: "asc" } }, { createdAt: "desc" }],
+  });
+
+  return tasks.map((task) => {
+    const latestUpdate = task.updates[0];
+    const monthlySalary = task.user.monthlySalary ? Number(task.user.monthlySalary) : 0;
+    const expectedDailyHours = task.user.expectedDailyHours ? Number(task.user.expectedDailyHours) : 8;
+    const hourlyRate = calculateHourlyRate(monthlySalary, expectedDailyHours);
+    const dailyRate = calculateDailyRate(monthlySalary);
+    const weeklyRate = calculateWeeklyRate(monthlySalary);
+    const regularMinutes = calculateRegularMinutes(latestUpdate?.trackedMinutes ?? 0, expectedDailyHours);
+    const overtimeMinutes = calculateOvertimeMinutes(latestUpdate?.trackedMinutes ?? 0, expectedDailyHours);
+    const workValue = calculateWorkValue(
+      latestUpdate?.trackedMinutes ?? 0,
+      monthlySalary,
+      expectedDailyHours,
+    );
+
+    return {
+      ...task,
+      hourlyRate,
+      dailyRate,
+      weeklyRate,
+      regularMinutes,
+      overtimeMinutes,
+      workValue,
+    };
+  });
+}
+
+export async function getAdminOverview() {
+  const [users, departments, reports, plans] = await Promise.all([
+    db.user.findMany({ include: { department: true }, orderBy: [{ isActive: "desc" }, { createdAt: "desc" }] }),
+    db.department.findMany({ orderBy: { name: "asc" } }),
+    db.dailyTaskUpdate.findMany({
+      include: {
+        dailyTask: { include: { user: true, department: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+    }),
+    db.dailyTask.findMany({
+      include: { user: true, department: true, updates: true },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+    }),
+  ]);
+
+  const usersWithComp = users.map((user) => ({
+    ...user,
+    dailyRate: calculateDailyRate(user.monthlySalary ? Number(user.monthlySalary) : 0),
+    weeklyRate: calculateWeeklyRate(user.monthlySalary ? Number(user.monthlySalary) : 0),
+    hourlyRate: calculateHourlyRate(
+      user.monthlySalary ? Number(user.monthlySalary) : 0,
+      user.expectedDailyHours ? Number(user.expectedDailyHours) : 8,
+    ),
+  }));
+
+  const reportsWithValue = reports.map((report) => ({
+    ...report,
+    dailyRate: calculateDailyRate(report.dailyTask.user.monthlySalary ? Number(report.dailyTask.user.monthlySalary) : 0),
+    weeklyRate: calculateWeeklyRate(report.dailyTask.user.monthlySalary ? Number(report.dailyTask.user.monthlySalary) : 0),
+    hourlyRate: calculateHourlyRate(
+      report.dailyTask.user.monthlySalary ? Number(report.dailyTask.user.monthlySalary) : 0,
+      report.dailyTask.user.expectedDailyHours ? Number(report.dailyTask.user.expectedDailyHours) : 8,
+    ),
+    overtimeMinutes: calculateOvertimeMinutes(
+      report.trackedMinutes,
+      report.dailyTask.user.expectedDailyHours ? Number(report.dailyTask.user.expectedDailyHours) : 8,
+    ),
+    workValue: calculateWorkValue(
+      report.trackedMinutes,
+      report.dailyTask.user.monthlySalary ? Number(report.dailyTask.user.monthlySalary) : 0,
+      report.dailyTask.user.expectedDailyHours ? Number(report.dailyTask.user.expectedDailyHours) : 8,
+    ),
+  }));
+
+  const totalTrackedMinutes = reports.reduce((sum, report) => sum + report.trackedMinutes, 0);
+  const totalWorkValue = reportsWithValue.reduce((sum, report) => sum + report.workValue, 0);
+  const activeUsersWithComp = usersWithComp.filter((user) => user.isActive);
+  const totalWeeklyPayroll = activeUsersWithComp.reduce((sum, user) => sum + user.weeklyRate, 0);
+  const totalDailyPayroll = activeUsersWithComp.reduce((sum, user) => sum + user.dailyRate, 0);
+  const latestReportSummaries = Array.from(
+    reportsWithValue.reduce((map, report) => {
+      const key = report.dailyTask.userId;
+      const existing = map.get(key) ?? {
+        userId: report.dailyTask.userId,
+        name: report.dailyTask.user.name,
+        role: report.dailyTask.user.role,
+        avatarUrl: report.dailyTask.user.avatarUrl,
+        departmentName: report.dailyTask.department.name,
+        totalReports: 0,
+        totalTrackedMinutes: 0,
+        totalWorkValue: 0,
+        latestStart: null as Date | null,
+        latestEnd: null as Date | null,
+        latestTaskTitle: report.dailyTask.taskTitle,
+        hourlyRate: report.hourlyRate,
+        dailyRate: report.dailyRate,
+        weeklyRate: report.weeklyRate,
+      };
+
+      existing.totalReports += 1;
+      existing.totalTrackedMinutes += report.trackedMinutes;
+      existing.totalWorkValue += report.workValue;
+      existing.latestTaskTitle = report.dailyTask.taskTitle;
+      existing.latestStart =
+        !existing.latestStart || (report.actualStart && report.actualStart > existing.latestStart)
+          ? (report.actualStart ?? existing.latestStart)
+          : existing.latestStart;
+      existing.latestEnd =
+        !existing.latestEnd || (report.actualEnd && report.actualEnd > existing.latestEnd)
+          ? (report.actualEnd ?? existing.latestEnd)
+          : existing.latestEnd;
+
+      map.set(key, existing);
+      return map;
+    }, new Map<string, {
+      userId: string;
+      name: string;
+      role: UserRole;
+      avatarUrl: string | null;
+      departmentName: string;
+      totalReports: number;
+      totalTrackedMinutes: number;
+      totalWorkValue: number;
+      latestStart: Date | null;
+      latestEnd: Date | null;
+      latestTaskTitle: string;
+      hourlyRate: number;
+      dailyRate: number;
+      weeklyRate: number;
+    }>()),
+  )
+    .map(([, value]) => value)
+    .sort((a, b) => b.totalTrackedMinutes - a.totalTrackedMinutes || b.totalReports - a.totalReports)
+    .slice(0, 6);
+
+  return {
+    users: usersWithComp,
+    departments,
+    reports: reportsWithValue,
+    latestReportSummaries,
+    plans,
+    metrics: {
+      totalTrackedMinutes,
+      totalWorkValue,
+      totalWeeklyPayroll,
+      totalDailyPayroll,
+    },
+  };
+}
+
+export async function getUnreadMessageCount(userId: string) {
+  return db.workspaceMessage.count({
+    where: {
+      recipientId: userId,
+      readAt: null,
+    },
+  });
+}
+
+export async function getApprovalNotificationCount(user: {
+  id: string;
+  role: UserRole;
+  departmentId?: string | null;
+}) {
+  if (user.role !== UserRole.manager) {
+    return 0;
+  }
+
+  return db.reportEditRequest.count({
+    where: {
+      status: "pending",
+      dailyTask: user.departmentId ? { departmentId: user.departmentId } : undefined,
+    },
+  });
+}
+
+export async function getWorkspaceMessages(userId: string) {
+  await db.workspaceMessage.updateMany({
+    where: {
+      recipientId: userId,
+      readAt: null,
+    },
+    data: {
+      readAt: new Date(),
+    },
+  });
+
+  const [contacts, inbox] = await Promise.all([
+    db.user.findMany({
+      where: { id: { not: userId }, isActive: true },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        department: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    }),
+    db.workspaceMessage.findMany({
+      where: {
+        OR: [{ senderId: userId }, { recipientId: userId }],
+      },
+      select: {
+        id: true,
+        subject: true,
+        body: true,
+        readAt: true,
+        createdAt: true,
+        senderId: true,
+        recipientId: true,
+        sender: {
+          select: {
+            name: true,
+            role: true,
+          },
+        },
+        recipient: {
+          select: {
+            name: true,
+            role: true,
+          },
+        },
+        attachments: {
+          select: {
+            id: true,
+            fileName: true,
+            fileUrl: true,
+            fileType: true,
+            fileSize: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 40,
+    }),
+  ]);
+
+  const unreadCount = inbox.filter((message) => message.recipientId === userId && !message.readAt).length;
+
+  return { contacts, inbox, unreadCount };
+}
+
+export async function getWorkspaceDirectoryData() {
+  const today = toDateOnly();
+
+  const users = await db.user.findMany({
+    where: {
+      isActive: true,
+    },
+    include: {
+      department: true,
+      taskOwner: {
+        where: {
+          planDate: new Date(today),
+        },
+        include: {
+          updates: true,
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+    orderBy: [{ role: "asc" }, { name: "asc" }],
+  });
+
+  return users.map((user) => ({
+    id: user.id,
+    name: user.name,
+    role: user.role,
+    designation: user.designation,
+    avatarUrl: user.avatarUrl,
+    departmentName: user.department?.name ?? "No department",
+    todaysPlans: user.taskOwner.map((task) => ({
+      id: task.id,
+      title: task.taskTitle,
+      priority: task.priority,
+      status: task.updates[0]?.status ?? "planned",
+    })),
+  }));
+}
+
+export async function getAttendanceData(user: {
+  id: string;
+  role: UserRole;
+  departmentId?: string | null;
+}) {
+  const today = toDateOnly();
+  type AttendanceRuntimeRecord = {
+    id: string;
+    userId: string;
+    status: "present" | "late" | "half_day" | "absent" | "remote";
+    checkInAt: Date | null;
+    checkOutAt: Date | null;
+    breakMinutes: number;
+    workingMinutes: number;
+    note: string | null;
+  };
+
+  const attendanceModel = (db as unknown as {
+    attendanceRecord?: {
+      findMany: (args: Record<string, unknown>) => Promise<AttendanceRuntimeRecord[]>;
+    };
+  }).attendanceRecord;
+  const attendanceWhere =
+    user.role === UserRole.manager && user.departmentId
+      ? { departmentId: user.departmentId }
+      : user.role === UserRole.employee
+        ? { id: user.id }
+        : undefined;
+
+  const users = await db.user.findMany({
+    where: {
+      isActive: true,
+      ...(attendanceWhere ?? {}),
+    },
+    include: {
+      department: true,
+    },
+    orderBy: [{ name: "asc" }],
+  });
+
+  const records: AttendanceRuntimeRecord[] = attendanceModel
+    ? await attendanceModel.findMany({
+        where: {
+          attendanceDate: new Date(today),
+          user: attendanceWhere,
+        },
+        include: {
+          user: {
+            include: {
+              department: true,
+            },
+          },
+        },
+        orderBy: [{ checkInAt: "asc" }],
+      })
+    : [];
+
+  const recordMap = new Map(records.map((record) => [record.userId, record]));
+
+  return users.map((member) => {
+    const record = recordMap.get(member.id) ?? null;
+    const workingMinutes = record?.workingMinutes ?? calculateMinutesBetween(record?.checkInAt, record?.checkOutAt) - (record?.breakMinutes ?? 0);
+
+    return {
+      userId: member.id,
+      name: member.name,
+      email: member.email,
+      role: member.role,
+      avatarUrl: member.avatarUrl,
+      departmentName: member.department?.name ?? "No department",
+      attendance: record
+        ? {
+            id: record.id,
+            status: record.status,
+            checkInAt: record.checkInAt,
+            checkOutAt: record.checkOutAt,
+            breakMinutes: record.breakMinutes,
+            workingMinutes: Math.max(0, workingMinutes),
+            note: record.note,
+          }
+        : null,
+    };
+  });
+}
+
+export async function getReminderCandidates(reminderDate = new Date()) {
+  const day = toDateOnly(reminderDate);
+  const users = await db.user.findMany({
+    where: {
+      isActive: true,
+      role: {
+        in: [UserRole.employee, UserRole.hr, UserRole.manager],
+      },
+    },
+    include: {
+      attendanceRecords: {
+        where: { attendanceDate: new Date(day) },
+      },
+      taskOwner: {
+        where: { planDate: new Date(day) },
+        include: { updates: true },
+      },
+      reminderDispatches: {
+        where: { reminderDate: new Date(day) },
+      },
+    },
+  });
+
+  return users.map((user) => {
+    const hasAttendance = user.attendanceRecords.length > 0;
+    const hasPlan = user.taskOwner.length > 0;
+    const hasReport = user.taskOwner.some((task) => task.updates.some((update) => toDateOnly(update.reportDate) === day));
+    const sentKinds = new Set(user.reminderDispatches.map((dispatch) => dispatch.kind));
+
+    return {
+      user,
+      hasAttendance,
+      hasPlan,
+      hasReport,
+      canSendAttendance: !hasAttendance && !sentKinds.has(ReminderKind.attendance_morning),
+      canSendPlan: !hasPlan && !sentKinds.has(ReminderKind.plan_morning),
+      canSendReport: hasPlan && !hasReport && !sentKinds.has(ReminderKind.report_evening),
+      day,
+    };
+  });
+}
+
+export async function markReminderSent(userId: string, reminderDate: string, kind: ReminderKind) {
+  await db.reminderDispatch.upsert({
+    where: {
+      userId_reminderDate_kind: {
+        userId,
+        reminderDate: new Date(reminderDate),
+        kind,
+      },
+    },
+    update: {
+      sentAt: new Date(),
+    },
+    create: {
+      userId,
+      reminderDate: new Date(reminderDate),
+      kind,
+    },
+  });
+}

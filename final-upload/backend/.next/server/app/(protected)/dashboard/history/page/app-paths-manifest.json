@@ -1,0 +1,3 @@
+{
+  "/(protected)/dashboard/history/page": "app/(protected)/dashboard/history/page.js"
+}

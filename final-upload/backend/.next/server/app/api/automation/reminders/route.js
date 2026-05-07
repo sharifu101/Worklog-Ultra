@@ -1,0 +1,11 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/automation/reminders/route.js")
+R.c("server/chunks/[root-of-the-server]__0n2dv_1._.js")
+R.c("server/chunks/_08n3bv1._.js")
+R.c("server/chunks/[root-of-the-server]__0hzdd_o._.js")
+R.c("server/chunks/[root-of-the-server]__0v8bdq7._.js")
+R.c("server/chunks/_0vo8nvh._.js")
+R.c("server/chunks/_03g7g8_._.js")
+R.c("server/chunks/src_lib_worklog_ts_0i872bs._.js")
+R.c("server/chunks/_next-internal_server_app_api_automation_reminders_route_actions_0njilvp.js")
+R.m(25950)
+module.exports=R.m(25950).exports
