@@ -30,5 +30,12 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "deploy-package",
+    "final-upload",
+    "worklog-ultra-app",
+    "worklog-ultra-deploy",
+    "build-package-temp"
+  ]
 }

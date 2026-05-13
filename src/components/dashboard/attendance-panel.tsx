@@ -32,6 +32,80 @@ type AttendanceItem = {
 
 type AttendanceStatusValue = "present" | "late" | "half_day" | "absent" | "remote";
 
+function formatAttendanceDateTime(value: Date | string = new Date()) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
+}
+
+function normalizeAttendanceDateTime(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)) {
+    return `${trimmed}:00+06:00`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}$/.test(trimmed)) {
+    return `${trimmed.replace(" ", "T")}:00+06:00`;
+  }
+
+  const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,\s*|\s+)(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const [, monthText, dayText, yearText, hourText, minuteText, meridiem] = match;
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const year = Number(yearText);
+  const minute = Number(minuteText);
+  let hour = Number(hourText);
+
+  if (
+    !Number.isFinite(month) ||
+    !Number.isFinite(day) ||
+    !Number.isFinite(year) ||
+    !Number.isFinite(hour) ||
+    !Number.isFinite(minute) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > 31 ||
+    hour < 1 ||
+    hour > 12 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return null;
+  }
+
+  const upperMeridiem = meridiem.toUpperCase();
+  if (upperMeridiem === "PM" && hour !== 12) {
+    hour += 12;
+  }
+  if (upperMeridiem === "AM" && hour === 12) {
+    hour = 0;
+  }
+
+  return `${yearText}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+06:00`;
+}
+
 export function AttendancePanel({
   userRole,
   currentUserId,
@@ -44,18 +118,32 @@ export function AttendancePanel({
   const router = useRouter();
   const me = items.find((item) => item.userId === currentUserId);
   const [status, setStatus] = useState<AttendanceStatusValue>(me?.attendance?.status ?? "present");
-  const [checkInAt, setCheckInAt] = useState(me?.attendance?.checkInAt ? toDateTimeInputValue(me.attendance.checkInAt) : "");
-  const [checkOutAt, setCheckOutAt] = useState(me?.attendance?.checkOutAt ? toDateTimeInputValue(me.attendance.checkOutAt) : "");
+  const [checkInAt, setCheckInAt] = useState(me?.attendance?.checkInAt ? formatAttendanceDateTime(me.attendance.checkInAt) : "");
+  const [checkOutAt, setCheckOutAt] = useState(me?.attendance?.checkOutAt ? formatAttendanceDateTime(me.attendance.checkOutAt) : "");
   const [breakMinutes, setBreakMinutes] = useState(String(me?.attendance?.breakMinutes ?? 0));
   const [note, setNote] = useState(me?.attendance?.note ?? "");
   const [saving, setSaving] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  const alreadyCheckedIn = Boolean(me?.attendance?.checkInAt) && !me?.attendance?.checkOutAt;
 
   async function saveAttendance(next: {
     nextStatus?: AttendanceStatusValue;
     nextCheckIn?: string;
     nextCheckOut?: string;
   } = {}) {
+    const normalizedCheckIn = normalizeAttendanceDateTime(next.nextCheckIn ?? checkInAt);
+    const normalizedCheckOut = normalizeAttendanceDateTime(next.nextCheckOut ?? checkOutAt);
+
+    if ((next.nextCheckIn ?? checkInAt) && normalizedCheckIn === null) {
+      toast.error("Check In time format is invalid. Use MM/DD/YYYY HH:MM AM or choose Today.");
+      return;
+    }
+
+    if ((next.nextCheckOut ?? checkOutAt) && normalizedCheckOut === null) {
+      toast.error("Check Out time format is invalid. Use MM/DD/YYYY HH:MM AM or choose Today.");
+      return;
+    }
+
     setSaving(true);
     const response = await fetch("/api/dashboard/attendance", {
       method: "POST",
@@ -64,8 +152,8 @@ export function AttendancePanel({
         attendanceDate: toDateOnly(),
         status: next.nextStatus ?? status,
         note,
-        checkInAt: next.nextCheckIn ?? checkInAt,
-        checkOutAt: next.nextCheckOut ?? checkOutAt,
+        checkInAt: normalizedCheckIn ?? "",
+        checkOutAt: normalizedCheckOut ?? "",
         breakMinutes,
       }),
     });
@@ -82,6 +170,8 @@ export function AttendancePanel({
     if (next.nextStatus) setStatus(next.nextStatus);
     if (next.nextCheckIn !== undefined) setCheckInAt(next.nextCheckIn);
     if (next.nextCheckOut !== undefined) setCheckOutAt(next.nextCheckOut);
+    if (next.nextCheckIn === undefined && normalizedCheckIn) setCheckInAt(formatAttendanceDateTime(normalizedCheckIn));
+    if (next.nextCheckOut === undefined && normalizedCheckOut) setCheckOutAt(formatAttendanceDateTime(normalizedCheckOut));
     toast.success(result.message);
     router.refresh();
   }
@@ -116,21 +206,63 @@ export function AttendancePanel({
               </div>
               <div>
                 <Label>Check In</Label>
-                <Input onChange={(event) => setCheckInAt(event.target.value)} type="datetime-local" value={checkInAt} />
+                <div className="flex gap-2">
+                  <Input
+                    className="flex-1"
+                    onChange={(event) => setCheckInAt(event.target.value)}
+                    placeholder="MM/DD/YYYY HH:MM AM"
+                    type="text"
+                    value={checkInAt}
+                  />
+                  <Button
+                    className="button-force-white shrink-0 bg-[#4f5ef7] hover:bg-[#4453eb]"
+                    onClick={() => setCheckInAt(formatAttendanceDateTime())}
+                    type="button"
+                  >
+                    Today
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label>Check Out</Label>
-                <Input onChange={(event) => setCheckOutAt(event.target.value)} type="datetime-local" value={checkOutAt} />
+                <div className="flex gap-2">
+                  <Input
+                    className="flex-1"
+                    onChange={(event) => setCheckOutAt(event.target.value)}
+                    placeholder="MM/DD/YYYY HH:MM AM"
+                    type="text"
+                    value={checkOutAt}
+                  />
+                  <Button
+                    className="button-force-white shrink-0 bg-amber-500 hover:bg-amber-600"
+                    onClick={() => setCheckOutAt(formatAttendanceDateTime())}
+                    type="button"
+                  >
+                    Today
+                  </Button>
+                </div>
               </div>
             </div>
             <div className="flex flex-wrap gap-2 xl:flex-col">
-              <Button disabled={saving} onClick={() => saveAttendance({ nextStatus: "present", nextCheckIn: toDateTimeInputValue() })} type="button">
-                <LogIn className="h-4 w-4" /> Check In
+              <Button
+                className="button-force-white"
+                disabled={saving || alreadyCheckedIn}
+                onClick={() => saveAttendance({ nextStatus: "present", nextCheckIn: formatAttendanceDateTime() })}
+                type="button"
+              >
+                <LogIn className="h-4 w-4" /> {alreadyCheckedIn ? "Checked In" : "Check In"}
               </Button>
-              <Button disabled={saving} onClick={() => saveAttendance({ nextCheckOut: toDateTimeInputValue() })} type="button" variant="secondary">
+              <Button
+                className="button-force-white bg-slate-700 hover:bg-slate-800"
+                disabled={saving}
+                onClick={() => saveAttendance({ nextCheckOut: formatAttendanceDateTime() })}
+                type="button"
+                variant="secondary"
+              >
                 <LogOut className="h-4 w-4" /> Check Out
               </Button>
               <Button
+                className="button-force-white bg-slate-500 hover:bg-slate-600"
                 disabled={saving}
                 onClick={() => {
                   setCheckInAt("");
@@ -149,7 +281,7 @@ export function AttendancePanel({
             <Label>Attendance Note</Label>
             <Textarea onChange={(event) => setNote(event.target.value)} placeholder="Optional attendance note for today." value={note} />
           </div>
-          <Button className="w-full" disabled={saving} onClick={() => saveAttendance()} type="button">
+          <Button className="button-force-white w-full" disabled={saving} onClick={() => saveAttendance()} type="button">
             {saving ? "Saving attendance..." : "Save Attendance"}
           </Button>
         </CardContent>
@@ -168,7 +300,7 @@ export function AttendancePanel({
                     <p className="font-semibold text-white">{item.name}</p>
                     <p className="text-sm text-[var(--muted-foreground)]">{item.departmentName}</p>
                   </div>
-                  <span className="rounded-full bg-cyan-400/10 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.18em] text-cyan-300">
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.18em] text-amber-600">
                     {item.attendance?.status ?? "missing"}
                   </span>
                 </div>
@@ -197,12 +329,11 @@ export function AttendancePanel({
           <CardTitle>Reminder Automation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-[var(--muted-foreground)]">
-          Morning reminder logic now supports attendance and work plan follow-up, and evening reminder logic supports pending report follow-up. Trigger the automation route
-          <span className="mx-1 rounded bg-[var(--panel-muted)] px-2 py-1 font-mono text-cyan-300">POST /api/automation/reminders</span>
-          from cron or your scheduler to send smart email reminders automatically.
+          This reminder tool can send attendance and work follow-up emails automatically. Run it manually from here when needed, or connect it with your scheduler in the background.
           {userRole !== "employee" ? (
             <div>
               <Button
+                className="button-force-white bg-[#4f5ef7] hover:bg-[#4453eb] disabled:bg-[#8fa2f7] disabled:opacity-100"
                 disabled={triggering}
                 onClick={async () => {
                   setTriggering(true);

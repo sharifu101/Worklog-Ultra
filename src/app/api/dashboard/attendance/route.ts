@@ -10,6 +10,17 @@ export async function POST(request: NextRequest) {
   const user = await requireUser();
   const attendanceModel = (db as unknown as {
     attendanceRecord?: {
+      findUnique?: (args: Record<string, unknown>) => Promise<{
+        id: string;
+        userId: string;
+        attendanceDate: Date;
+        status: "present" | "late" | "half_day" | "absent" | "remote";
+        note: string | null;
+        checkInAt: Date | null;
+        checkOutAt: Date | null;
+        breakMinutes: number;
+        workingMinutes: number;
+      } | null>;
       upsert: (args: Record<string, unknown>) => Promise<unknown>;
     };
   }).attendanceRecord;
@@ -31,7 +42,25 @@ export async function POST(request: NextRequest) {
 
   const checkInAt = parsed.data.checkInAt ? new Date(parsed.data.checkInAt) : null;
   const checkOutAt = parsed.data.checkOutAt ? new Date(parsed.data.checkOutAt) : null;
-  const workingMinutes = Math.max(0, calculateMinutesBetween(checkInAt, checkOutAt) - parsed.data.breakMinutes);
+  const existingRecord = attendanceModel.findUnique
+    ? await attendanceModel.findUnique({
+        where: {
+          userId_attendanceDate: {
+            userId: user.id,
+            attendanceDate: new Date(targetDate),
+          },
+        },
+      })
+    : null;
+
+  const finalCheckInAt =
+    existingRecord?.checkInAt && checkInAt
+      ? existingRecord.checkInAt.getTime() <= checkInAt.getTime()
+        ? existingRecord.checkInAt
+        : checkInAt
+      : existingRecord?.checkInAt ?? checkInAt;
+  const finalCheckOutAt = checkOutAt ?? null;
+  const workingMinutes = Math.max(0, calculateMinutesBetween(finalCheckInAt, finalCheckOutAt) - parsed.data.breakMinutes);
 
   const record = await attendanceModel.upsert({
     where: {
@@ -43,8 +72,8 @@ export async function POST(request: NextRequest) {
     update: {
       status: parsed.data.status,
       note: parsed.data.note || null,
-      checkInAt,
-      checkOutAt,
+      checkInAt: finalCheckInAt,
+      checkOutAt: finalCheckOutAt,
       breakMinutes: parsed.data.breakMinutes,
       workingMinutes,
     },
@@ -53,8 +82,8 @@ export async function POST(request: NextRequest) {
       attendanceDate: new Date(targetDate),
       status: parsed.data.status,
       note: parsed.data.note || null,
-      checkInAt,
-      checkOutAt,
+      checkInAt: finalCheckInAt,
+      checkOutAt: finalCheckOutAt,
       breakMinutes: parsed.data.breakMinutes,
       workingMinutes,
     },

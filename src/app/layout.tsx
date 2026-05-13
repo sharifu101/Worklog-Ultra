@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title: "WorkLog Ultra",
   description: "Daily work plan and reporting dashboard",
   icons: {
-    icon: "/icon.svg",
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     shortcut: "/icon.svg",
     apple: "/icon.svg",
   },
@@ -28,7 +28,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${manrope.variable} h-full antialiased`}
-      data-theme="dark"
+      data-theme="light"
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { parseApiResponse } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 type Department = { id: string; name: string };
@@ -56,8 +57,7 @@ export function SignupForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const raw = await response.text();
-    const result = raw ? JSON.parse(raw) : { message: "Registration request failed." };
+    const result = await parseApiResponse<{ message: string; otp?: string }>(response, "Registration request failed.");
     setLoading(false);
 
     if (!response.ok) {
@@ -80,8 +80,7 @@ export function SignupForm({
         code: String(formData.get("code") ?? ""),
       }),
     });
-    const raw = await response.text();
-    const result = raw ? JSON.parse(raw) : { message: "Verification request failed." };
+    const result = await parseApiResponse<{ message: string }>(response, "Verification request failed.");
     setLoading(false);
 
     if (!response.ok) {

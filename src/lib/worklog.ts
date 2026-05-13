@@ -1,6 +1,10 @@
 import { ReminderKind, TaskStatus, UserRole } from "@prisma/client";
 import { endOfDay, startOfDay, subDays } from "date-fns";
+import { extractAssignmentReviewReason, isAssignmentReviewReason } from "@/lib/assignment-review";
 import { db } from "@/lib/db";
+import { isMovedToHistory } from "@/lib/task-history-shared";
+import { isRecurringTaskDescription } from "@/lib/recurring-task-templates";
+import { extractContinuationMeta } from "@/lib/task-continuation";
 import {
   calculateDailyRate,
   calculateHourlyRate,
@@ -71,6 +75,280 @@ export async function getDepartments() {
   return db.department.findMany({ orderBy: { name: "asc" } });
 }
 
+export async function getAssignableUsers() {
+  const users = await db.user.findMany({
+    where: { isActive: true },
+    include: { department: true },
+    orderBy: [{ department: { name: "asc" } }, { name: "asc" }],
+  });
+
+  return users.map((user) => ({
+    id: user.id,
+    name: user.name,
+    role: user.role,
+    designation: user.designation,
+    departmentId: user.departmentId,
+    departmentName: user.department?.name ?? "No department",
+  }));
+}
+
+export async function getAssignmentsData(userId: string) {
+  const today = toDateOnly();
+
+  const [assignedByMe, assignedToMe] = await Promise.all([
+    db.dailyTask.findMany({
+      where: {
+        assignedBy: userId,
+        planDate: {
+          gte: startOfDay(new Date(today)),
+          lte: endOfDay(new Date(today)),
+        },
+      },
+      include: {
+        department: true,
+        user: {
+          include: {
+            department: true,
+          },
+        },
+        assigner: {
+          include: {
+            department: true,
+          },
+        },
+        editRequests: {
+          where: {
+            reason: {
+              startsWith: "[assignment-review]",
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        updates: {
+          orderBy: { updatedAt: "desc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.dailyTask.findMany({
+      where: {
+        userId,
+        assignedBy: {
+          not: null,
+        },
+        planDate: {
+          gte: startOfDay(new Date(today)),
+          lte: endOfDay(new Date(today)),
+        },
+      },
+      include: {
+        department: true,
+        user: {
+          include: {
+            department: true,
+          },
+        },
+        assigner: {
+          include: {
+            department: true,
+          },
+        },
+        editRequests: {
+          where: {
+            reason: {
+              startsWith: "[assignment-review]",
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        updates: {
+          orderBy: { updatedAt: "desc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const serializeAssignmentTask = (task: (typeof assignedByMe)[number]) => ({
+    id: task.id,
+    planDate: task.planDate,
+    createdAt: task.createdAt,
+    taskTitle: task.taskTitle,
+    taskDescription: task.taskDescription,
+    priority: task.priority,
+    department: {
+      name: task.department.name,
+    },
+    user: {
+      name: task.user.name,
+      department: task.user.department
+        ? {
+            name: task.user.department.name,
+          }
+        : null,
+    },
+    assigner: task.assigner
+      ? {
+          name: task.assigner.name,
+          department: task.assigner.department
+            ? {
+                name: task.assigner.department.name,
+              }
+            : null,
+        }
+      : null,
+    updates: task.updates.map((update) => ({
+      status: update.status,
+      note: update.note,
+      trackedMinutes: update.trackedMinutes,
+      actualStart: update.actualStart,
+      actualEnd: update.actualEnd,
+      updatedAt: update.updatedAt,
+    })),
+    latestReview: task.editRequests[0]
+      ? {
+          id: task.editRequests[0].id,
+          status: task.editRequests[0].status,
+          submitNote: extractAssignmentReviewReason(task.editRequests[0].reason) ?? "",
+          reviewNote: task.editRequests[0].reviewNote,
+          createdAt: task.editRequests[0].createdAt,
+          reviewedAt: task.editRequests[0].reviewedAt,
+          requestedById: task.editRequests[0].requestedById,
+          reviewerId: task.editRequests[0].reviewerId,
+        }
+      : null,
+  });
+
+  return {
+    assignedByMe: assignedByMe.map(serializeAssignmentTask),
+    assignedToMe: assignedToMe.map(serializeAssignmentTask),
+  };
+}
+
+export async function getAssignmentNotificationCount(userId: string) {
+  const notifications = await getAssignmentNotifications(userId);
+  return notifications.length;
+}
+
+export async function getAssignmentNotifications(userId: string) {
+  const today = toDateOnly();
+
+  const [tasksAssignedByMe, tasksAssignedToMe] = await Promise.all([
+    db.dailyTask.findMany({
+      where: {
+        assignedBy: userId,
+        planDate: {
+          gte: startOfDay(new Date(today)),
+          lte: endOfDay(new Date(today)),
+        },
+      },
+      include: {
+        user: {
+          include: {
+            department: true,
+          },
+        },
+        assigner: true,
+        editRequests: {
+          where: {
+            reason: {
+              startsWith: "[assignment-review]",
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        updates: {
+          where: {
+            OR: [{ status: TaskStatus.done }, { note: { not: null } }],
+          },
+          orderBy: { updatedAt: "desc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.dailyTask.findMany({
+      where: {
+        userId,
+        assignedBy: {
+          not: null,
+        },
+        planDate: {
+          gte: startOfDay(new Date(today)),
+          lte: endOfDay(new Date(today)),
+        },
+      },
+      include: {
+        user: {
+          include: {
+            department: true,
+          },
+        },
+        assigner: {
+          include: {
+            department: true,
+          },
+        },
+        updates: {
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const assignerNotifications = tasksAssignedByMe
+    .filter((task) => task.updates.length > 0 || task.editRequests.length > 0)
+    .map((task) => ({
+      taskId: task.id,
+      taskTitle: task.taskTitle,
+      assigneeName: task.user.name,
+      assigneeDepartmentName: task.user.department?.name ?? task.user.departmentId ?? "No department",
+      status: task.updates[0]?.status ?? TaskStatus.pending,
+      note:
+        task.editRequests[0] && isAssignmentReviewReason(task.editRequests[0].reason)
+          ? extractAssignmentReviewReason(task.editRequests[0].reason) ?? task.updates[0]?.note ?? ""
+          : task.updates[0]?.note ?? "",
+      trackedMinutes: task.updates[0]?.trackedMinutes ?? 0,
+      updatedAt:
+        task.editRequests[0]?.createdAt?.toISOString() ??
+        task.updates[0]?.updatedAt?.toISOString() ??
+        task.createdAt.toISOString(),
+    }));
+
+  const assigneeNotifications = tasksAssignedToMe.map((task) => ({
+    taskId: task.id,
+    taskTitle: task.taskTitle,
+    assigneeName: task.assigner?.name ?? "New assignment",
+    assigneeDepartmentName: task.assigner?.department?.name ?? task.user.department?.name ?? "No department",
+    status: task.updates[0]?.status ?? TaskStatus.pending,
+    note: task.taskDescription ?? "A new task has been assigned to you.",
+    trackedMinutes: task.updates[0]?.trackedMinutes ?? 0,
+    updatedAt: task.updates[0]?.updatedAt?.toISOString() ?? task.createdAt.toISOString(),
+  }));
+
+  return [...assigneeNotifications, ...assignerNotifications].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+export async function getRequestNotificationCount(user: {
+  id: string;
+  role: UserRole;
+  departmentId?: string | null;
+}) {
+  return 0;
+}
+
+export async function getRequestNotifications(user: {
+  id: string;
+  role: UserRole;
+  departmentId?: string | null;
+}) {
+  return [];
+}
+
 export async function getDashboardData(userId: string, role: UserRole, departmentId?: string | null) {
   const today = new Date();
   const dayStart = startOfDay(today);
@@ -78,16 +356,25 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
 
   const taskWhere =
     role === UserRole.employee
-      ? { userId, planDate: { gte: dayStart, lte: dayEnd } }
+      ? { userId, assignedBy: null, planDate: { gte: dayStart, lte: dayEnd } }
       : role === UserRole.manager && departmentId
         ? { departmentId, planDate: { gte: dayStart, lte: dayEnd } }
         : { planDate: { gte: dayStart, lte: dayEnd } };
 
-  const [tasks, activeStaff] = await Promise.all([
+  const [tasks, activeStaff, performanceUsers] = await Promise.all([
     db.dailyTask.findMany({
       where: taskWhere,
       include: {
         user: { include: { department: true } },
+        editRequests: {
+          where: {
+            reason: {
+              startsWith: "[assignment-review]",
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
         updates: true,
       },
       orderBy: { createdAt: "desc" },
@@ -111,9 +398,39 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
               }
             : {
                 isActive: true,
-                id: userId,
-              },
+        id: userId,
+      },
     }),
+    role === UserRole.employee
+      ? Promise.resolve([])
+      : db.user.findMany({
+          where:
+            role === UserRole.admin
+              ? {
+                  isActive: true,
+                  role: {
+                    in: [UserRole.employee, UserRole.hr, UserRole.manager],
+                  },
+                }
+              : departmentId
+                ? {
+                    isActive: true,
+                    departmentId,
+                    role: {
+                      in: [UserRole.employee, UserRole.hr, UserRole.manager],
+                    },
+                  }
+                : {
+                    isActive: true,
+                    role: {
+                      in: [UserRole.employee, UserRole.hr, UserRole.manager],
+                    },
+                  },
+          include: {
+            department: true,
+          },
+          orderBy: [{ name: "asc" }],
+        }),
   ]);
 
   const reportsSubmitted = tasks.filter((task) => task.updates.some((item) => toDateOnly(item.reportDate) === toDateOnly(today))).length;
@@ -141,6 +458,59 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
     }),
   );
 
+  const performanceMembers =
+    role === UserRole.employee
+      ? []
+      : performanceUsers.map((member) => {
+          const memberTasks = tasks.filter((task) => task.userId === member.id);
+          const completedTasks = memberTasks.filter((task) => task.updates[0]?.status === TaskStatus.done);
+          const inProgressTasks = memberTasks.filter((task) => task.updates[0]?.status === TaskStatus.in_progress);
+          const missedTasks = memberTasks.filter((task) => {
+            const latest = task.updates[0];
+            return !latest || latest.status === TaskStatus.pending;
+          });
+          const trackedMinutes = memberTasks.reduce((sum, task) => sum + (task.updates[0]?.trackedMinutes ?? 0), 0);
+          const completionRate = memberTasks.length ? completedTasks.length / memberTasks.length : 0;
+          const momentumRate = memberTasks.length ? inProgressTasks.length / memberTasks.length : 0;
+          const score = Math.round(completionRate * 70 + momentumRate * 15 + Math.min(trackedMinutes / 12, 15));
+
+          return {
+            id: member.id,
+            name: member.name,
+            role: member.role,
+            departmentId: member.departmentId ?? "no-department",
+            departmentName: member.department?.name ?? "No department",
+            avatarUrl: member.avatarUrl ?? null,
+            score,
+            completionRate,
+            trackedMinutes,
+            completedCount: completedTasks.length,
+            plannedCount: memberTasks.length,
+            missedCount: missedTasks.length,
+            goodTasks: completedTasks.slice(0, 3).map((task) => task.taskTitle),
+            missedTasks: missedTasks.slice(0, 3).map((task) => task.taskTitle),
+          };
+        });
+
+  const sortedPerformanceMembers = [...performanceMembers].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.completedCount !== a.completedCount) return b.completedCount - a.completedCount;
+    return b.trackedMinutes - a.trackedMinutes;
+  });
+
+  const averageScore =
+    sortedPerformanceMembers.length > 0
+      ? sortedPerformanceMembers.reduce((sum, member) => sum + member.score, 0) / sortedPerformanceMembers.length
+      : 0;
+
+  const topPerformer = sortedPerformanceMembers[0] ?? null;
+  const steadyPerformer =
+    sortedPerformanceMembers.length > 1
+      ? [...sortedPerformanceMembers]
+          .slice(1)
+          .sort((a, b) => Math.abs(a.score - averageScore) - Math.abs(b.score - averageScore))[0] ?? null
+      : null;
+
   return {
     kpis: {
       activeStaff,
@@ -151,14 +521,24 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
     },
     tasks,
     recentTrend,
+    performanceSpotlights: {
+      topPerformer,
+      steadyPerformer,
+      members: sortedPerformanceMembers,
+    },
   };
 }
 
-export async function getPlanWithReports(userId: string, date = new Date()) {
+export async function getPlanWithReports(
+  userId: string,
+  date = new Date(),
+  options?: { includeAssigned?: boolean },
+) {
   const day = toDateOnly(date);
   return db.dailyTask.findMany({
     where: {
       userId,
+      ...(options?.includeAssigned ? {} : { assignedBy: null }),
       planDate: new Date(day),
     },
     include: {
@@ -174,29 +554,9 @@ export async function canUserEditReportDate(
   planDate: Date,
   taskIds: string[],
 ) {
-  if (user.role === UserRole.manager || user.role === UserRole.admin) {
-    return { allowed: true, mode: "direct" as const };
-  }
-
-  if (toDateOnly(planDate) === toDateOnly()) {
-    return { allowed: true, mode: "today" as const };
-  }
-
-  if (!taskIds.length) {
-    return { allowed: false, mode: "none" as const };
-  }
-
-  const approvedCount = await db.reportEditRequest.count({
-    where: {
-      dailyTaskId: { in: taskIds },
-      requestedById: user.id,
-      status: "approved",
-    },
-  });
-
   return {
-    allowed: approvedCount === taskIds.length,
-    mode: approvedCount === taskIds.length ? ("approved" as const) : ("locked" as const),
+    allowed: true,
+    mode: user.role === UserRole.manager || user.role === UserRole.admin ? ("direct" as const) : ("today" as const),
   };
 }
 
@@ -324,17 +684,24 @@ export async function getHistoryData(userId: string, from?: string, to?: string)
     }),
   ]);
 
-  return tasks.map((task) => {
-    const latestRequest = editRequests.find((request) => request.dailyTaskId === task.id) ?? null;
+  return tasks
+    .filter((task) => {
+      const isToday = toDateOnly(task.planDate) === toDateOnly();
+      const isStickyDashboardTask =
+        Boolean(extractContinuationMeta(task.taskDescription)) || isRecurringTaskDescription(task.taskDescription);
+      const archivedToHistory = isMovedToHistory(task.taskDescription);
+
+      return !(isToday && isStickyDashboardTask && !archivedToHistory);
+    })
+    .map((task) => {
     const isToday = toDateOnly(task.planDate) === toDateOnly();
-    const approved = latestRequest?.status === "approved";
 
     return {
       ...task,
-      latestRequest,
+      latestRequest: null,
       isToday,
-      canEmployeeEdit: isToday || approved,
-      canRequestEdit: !isToday && !approved,
+      canEmployeeEdit: true,
+      canRequestEdit: false,
     };
   });
 }
@@ -344,71 +711,87 @@ export async function getPendingReportEditRequests(reviewer: {
   role: UserRole;
   departmentId?: string | null;
 }) {
-  if (reviewer.role !== UserRole.manager) {
-    return [];
-  }
-
-  return db.reportEditRequest.findMany({
-    where: {
-      status: "pending",
-      dailyTask: reviewer.departmentId ? { departmentId: reviewer.departmentId } : undefined,
-    },
-    include: {
-      requestedBy: {
-        include: {
-          department: true,
-        },
-      },
-      dailyTask: {
-        include: {
-          department: true,
-        },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 30,
-  });
+  return [];
 }
 
-export async function getTeamData(role: UserRole, departmentId?: string | null) {
+export async function getTeamData(role: UserRole, departmentId?: string | null, scopeToDepartment = false) {
   const today = toDateOnly();
+  const sharedWhere = (role === UserRole.manager || scopeToDepartment) && departmentId ? { departmentId } : {};
+  const visibleRoles =
+    role === UserRole.admin
+      ? [UserRole.employee, UserRole.hr, UserRole.manager, UserRole.admin]
+      : [UserRole.employee, UserRole.hr, UserRole.manager];
 
-  const tasks = await db.dailyTask.findMany({
-    where: {
-      ...(role === UserRole.manager && departmentId ? { departmentId } : {}),
-      planDate: new Date(today),
-    },
-    include: {
-      department: true,
-      user: true,
-      updates: true,
-    },
-    orderBy: [{ department: { name: "asc" } }, { createdAt: "desc" }],
-  });
+  const [users, tasks] = await Promise.all([
+    db.user.findMany({
+      where: {
+        ...sharedWhere,
+        role: {
+          in: visibleRoles,
+        },
+      },
+      include: {
+        department: true,
+      },
+      orderBy: [{ department: { name: "asc" } }, { name: "asc" }],
+    }),
+    db.dailyTask.findMany({
+      where: {
+        ...sharedWhere,
+        planDate: new Date(today),
+      },
+      include: {
+        department: true,
+        user: true,
+        updates: true,
+      },
+      orderBy: [{ department: { name: "asc" } }, { createdAt: "desc" }],
+    }),
+  ]);
 
-  return tasks.map((task) => {
-    const latestUpdate = task.updates[0];
-    const monthlySalary = task.user.monthlySalary ? Number(task.user.monthlySalary) : 0;
-    const expectedDailyHours = task.user.expectedDailyHours ? Number(task.user.expectedDailyHours) : 8;
+  return users.map((user) => {
+    const memberTasks = tasks.filter((task) => task.userId === user.id);
+    const monthlySalary = user.monthlySalary ? Number(user.monthlySalary) : 0;
+    const expectedDailyHours = user.expectedDailyHours ? Number(user.expectedDailyHours) : 8;
     const hourlyRate = calculateHourlyRate(monthlySalary, expectedDailyHours);
     const dailyRate = calculateDailyRate(monthlySalary);
     const weeklyRate = calculateWeeklyRate(monthlySalary);
-    const regularMinutes = calculateRegularMinutes(latestUpdate?.trackedMinutes ?? 0, expectedDailyHours);
-    const overtimeMinutes = calculateOvertimeMinutes(latestUpdate?.trackedMinutes ?? 0, expectedDailyHours);
-    const workValue = calculateWorkValue(
-      latestUpdate?.trackedMinutes ?? 0,
-      monthlySalary,
-      expectedDailyHours,
-    );
+    const trackedMinutes = memberTasks.reduce((sum, task) => sum + (task.updates[0]?.trackedMinutes ?? 0), 0);
+    const completedTasks = memberTasks.filter((task) => task.updates[0]?.status === TaskStatus.done).length;
+    const firstStart = memberTasks
+      .map((task) => task.updates[0]?.actualStart ?? null)
+      .filter((value): value is Date => Boolean(value))
+      .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+    const lastEnd = memberTasks
+      .map((task) => task.updates[0]?.actualEnd ?? null)
+      .filter((value): value is Date => Boolean(value))
+      .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+    const overtimeMinutes = calculateOvertimeMinutes(trackedMinutes, expectedDailyHours);
+    const regularMinutes = calculateRegularMinutes(trackedMinutes, expectedDailyHours);
+    const workValue = calculateWorkValue(trackedMinutes, monthlySalary, expectedDailyHours);
 
     return {
-      ...task,
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      extraAccess: user.extraAccess,
+      departmentId: user.departmentId,
+      isActive: user.isActive,
+      avatarUrl: user.avatarUrl ?? null,
+      departmentName: user.department?.name ?? "No department",
+      tasksPlanned: memberTasks.length,
+      completedTasks,
+      trackedMinutes,
+      overtimeMinutes,
+      regularMinutes,
+      workValue,
       hourlyRate,
       dailyRate,
       weeklyRate,
-      regularMinutes,
-      overtimeMinutes,
-      workValue,
+      monthlySalary,
+      expectedDailyHours,
+      firstStart,
+      lastEnd,
     };
   });
 }
@@ -545,6 +928,48 @@ export async function getUnreadMessageCount(userId: string) {
   });
 }
 
+export async function getActiveNoticesForUser(user: {
+  id: string;
+  departmentId?: string | null;
+}) {
+  return db.hrNotice.findMany({
+    where: {
+      isActive: true,
+      publishedAt: { not: null },
+      OR: [{ targetDepartmentId: null }, { targetDepartmentId: user.departmentId ?? undefined }],
+      dismissals: {
+        none: {
+          userId: user.id,
+        },
+      },
+    },
+    include: {
+      author: true,
+      targetDepartment: true,
+    },
+    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+    take: 12,
+  });
+}
+
+export async function getNoticeNotificationCount(user: {
+  id: string;
+  departmentId?: string | null;
+}) {
+  return db.hrNotice.count({
+    where: {
+      isActive: true,
+      publishedAt: { not: null },
+      OR: [{ targetDepartmentId: null }, { targetDepartmentId: user.departmentId ?? undefined }],
+      dismissals: {
+        none: {
+          userId: user.id,
+        },
+      },
+    },
+  });
+}
+
 export async function getApprovalNotificationCount(user: {
   id: string;
   role: UserRole;
@@ -632,12 +1057,23 @@ export async function getWorkspaceMessages(userId: string) {
   return { contacts, inbox, unreadCount };
 }
 
-export async function getWorkspaceDirectoryData() {
+export async function getWorkspaceDirectoryData(viewer: {
+  role: UserRole;
+  departmentId?: string | null;
+  scopeToDepartment?: boolean;
+}) {
   const today = toDateOnly();
+  const departmentScope =
+    (viewer.role === UserRole.manager || viewer.scopeToDepartment) && viewer.departmentId
+      ? {
+          departmentId: viewer.departmentId,
+        }
+      : {};
 
   const users = await db.user.findMany({
     where: {
       isActive: true,
+      ...departmentScope,
     },
     include: {
       department: true,
@@ -651,23 +1087,56 @@ export async function getWorkspaceDirectoryData() {
         orderBy: { createdAt: "asc" },
       },
     },
-    orderBy: [{ role: "asc" }, { name: "asc" }],
+    orderBy: [{ department: { name: "asc" } }, { role: "asc" }, { name: "asc" }],
   });
 
-  return users.map((user) => ({
-    id: user.id,
-    name: user.name,
-    role: user.role,
-    designation: user.designation,
-    avatarUrl: user.avatarUrl,
-    departmentName: user.department?.name ?? "No department",
-    todaysPlans: user.taskOwner.map((task) => ({
-      id: task.id,
-      title: task.taskTitle,
-      priority: task.priority,
-      status: task.updates[0]?.status ?? "planned",
-    })),
-  }));
+  const departments = Array.from(
+    new Map(
+      users.map((user) => [
+        user.departmentId ?? "no-department",
+        {
+          id: user.departmentId ?? "no-department",
+          name: user.department?.name ?? "No department",
+        },
+      ]),
+    ).values(),
+  );
+
+  return {
+    departments,
+    users: users.map((user) => {
+      const todaysPlans = user.taskOwner.map((task) => {
+        const latestUpdate = task.updates[0] ?? null;
+
+        return {
+          id: task.id,
+          title: task.taskTitle,
+          description: task.taskDescription,
+          priority: task.priority,
+          status: latestUpdate?.status ?? "planned",
+          completionPercent: latestUpdate?.completionPercent ?? 0,
+          trackedMinutes: latestUpdate?.trackedMinutes ?? 0,
+          actualStart: latestUpdate?.actualStart ?? null,
+          actualEnd: latestUpdate?.actualEnd ?? null,
+          note: latestUpdate?.note ?? null,
+        };
+      });
+
+      return {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        designation: user.designation,
+        avatarUrl: user.avatarUrl,
+        departmentId: user.departmentId ?? "no-department",
+        departmentName: user.department?.name ?? "No department",
+        taskCount: todaysPlans.length,
+        completedTaskCount: todaysPlans.filter((task) => task.status === "done").length,
+        totalTrackedMinutes: todaysPlans.reduce((sum, task) => sum + task.trackedMinutes, 0),
+        todaysPlans,
+      };
+    }),
+  };
 }
 
 export async function getAttendanceData(user: {
@@ -752,6 +1221,39 @@ export async function getAttendanceData(user: {
           }
         : null,
     };
+  });
+}
+
+export async function getCurrentUserAttendanceSnapshot(userId: string) {
+  const today = toDateOnly();
+  type AttendanceRuntimeRecord = {
+    id: string;
+    userId: string;
+    status: "present" | "late" | "half_day" | "absent" | "remote";
+    checkInAt: Date | null;
+    checkOutAt: Date | null;
+    breakMinutes: number;
+    workingMinutes: number;
+    note: string | null;
+  };
+
+  const attendanceModel = (db as unknown as {
+    attendanceRecord?: {
+      findUnique: (args: Record<string, unknown>) => Promise<AttendanceRuntimeRecord | null>;
+    };
+  }).attendanceRecord;
+
+  if (!attendanceModel) {
+    return null;
+  }
+
+  return attendanceModel.findUnique({
+    where: {
+      userId_attendanceDate: {
+        userId,
+        attendanceDate: new Date(today),
+      },
+    },
   });
 }
 

@@ -60,7 +60,7 @@ Important:
 
 ### Database setup
 
-Run on production database:
+Run on the same production database:
 
 ```bash
 npx prisma db push
@@ -78,6 +78,18 @@ These folders must stay persistent after deploy:
 
 - `public/uploads/avatars`
 - `public/uploads/messages`
+
+### Update without losing data
+
+For future uploads:
+
+1. keep the existing PostgreSQL database
+2. upload only the new backend files
+3. run `npx prisma db push`
+4. do not restore the SQL dump again unless this is a brand new server
+5. do not replace `public/uploads` if it already contains live files
+
+This keeps previous data and uploads intact.
 
 ### Frontend-static note
 

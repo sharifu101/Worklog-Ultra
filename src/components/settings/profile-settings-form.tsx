@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Clock3, ImagePlus, MapPin, Phone, Wallet, UserRound } from "lucide-react";
+import { Building2, ImagePlus, MapPin, Phone, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -32,7 +32,6 @@ export function ProfileSettingsForm({
   departments: Department[];
 }) {
   const router = useRouter();
-  const requiresSalary = user.role === "employee";
   const [loading, setLoading] = useState(false);
   const [departmentId, setDepartmentId] = useState(user.departmentId ?? "__none__");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -80,8 +79,8 @@ export function ProfileSettingsForm({
       phone: String(formData.get("phone") ?? ""),
       location: String(formData.get("location") ?? ""),
       avatarUrl: nextAvatarUrl,
-      monthlySalary: String(formData.get("monthlySalary") ?? ""),
-      expectedDailyHours: String(formData.get("expectedDailyHours") ?? ""),
+      monthlySalary: undefined,
+      expectedDailyHours: undefined,
       departmentId: departmentId === "__none__" ? null : departmentId,
     };
 
@@ -166,42 +165,6 @@ export function ProfileSettingsForm({
             <Input className="pl-10" defaultValue={user.location ?? ""} name="location" placeholder="Office location" />
           </div>
         </div>
-        <div>
-          <Label>{requiresSalary ? "Monthly Salary *" : "Monthly Salary"}</Label>
-          <div className="relative">
-            <Wallet className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
-            <Input
-              className="pl-10"
-              defaultValue={user.monthlySalary ?? ""}
-              min="0"
-              name="monthlySalary"
-              placeholder={requiresSalary ? "Required monthly salary in BDT" : "Monthly salary in BDT"}
-              required={requiresSalary}
-              step="0.01"
-              type="number"
-            />
-          </div>
-          {requiresSalary ? (
-            <p className="mt-2 text-xs text-[var(--muted-foreground)]">
-              Employee salary is required because Team Head and CEO/Admin analytics calculate hourly, daily, weekly, and task value from this amount.
-            </p>
-          ) : null}
-        </div>
-        <div>
-          <Label>Expected Daily Hours</Label>
-          <div className="relative">
-            <Clock3 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
-            <Input
-              className="pl-10"
-              defaultValue={user.expectedDailyHours ?? 8}
-              min="1"
-              max="24"
-              name="expectedDailyHours"
-              step="0.5"
-              type="number"
-            />
-          </div>
-        </div>
       </div>
       <div>
         <Label>Department</Label>
@@ -226,7 +189,7 @@ export function ProfileSettingsForm({
         <div>
           <p className="font-semibold text-white">Enterprise profile controls</p>
           <p className="text-sm text-[var(--muted-foreground)]">
-            Keep your identity, salary baseline, image, and department information current for the entire workspace.
+            Keep your identity, image, and department information current for the entire workspace. Salary setup stays inside Team panel for Team Head and Admin only.
           </p>
         </div>
         <Button disabled={loading} type="submit">

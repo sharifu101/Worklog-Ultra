@@ -34,10 +34,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/admin") && !["admin", "manager"].includes(role ?? "")) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
-  }
-
   return NextResponse.next();
 }
 

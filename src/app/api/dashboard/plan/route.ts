@@ -14,17 +14,38 @@ export async function POST(request: NextRequest) {
   }
 
   const planDate = new Date(parsed.data.planDate);
-
-  await db.dailyTask.createMany({
-    data: parsed.data.tasks.map((task) => ({
-      userId: user.id,
-      departmentId: task.departmentId,
-      planDate,
-      taskTitle: task.taskTitle,
-      taskDescription: task.taskDescription || null,
-      priority: task.priority,
-    })),
+  const assigneeIds = parsed.data.tasks.map((task) => task.assigneeId ?? user.id);
+  const activeAssigneeCount = await db.user.count({
+    where: {
+      id: { in: assigneeIds },
+      isActive: true,
+    },
   });
 
-  return apiSuccess({ message: "Morning plan added successfully." });
+  if (activeAssigneeCount !== assigneeIds.length) {
+    return apiError("One or more selected assignees are not active.");
+  }
+
+  const createdTasks = await db.$transaction(
+    parsed.data.tasks.map((task) =>
+      db.dailyTask.create({
+        data: {
+          userId: task.assigneeId ?? user.id,
+          departmentId: task.departmentId,
+          planDate,
+          taskTitle: task.taskTitle,
+          taskDescription: task.taskDescription || null,
+          priority: task.priority,
+          assignedBy: task.assigneeId && task.assigneeId !== user.id ? user.id : null,
+        },
+        select: {
+          id: true,
+          taskTitle: true,
+          departmentId: true,
+        },
+      }),
+    ),
+  );
+
+  return apiSuccess({ message: "Morning plan added successfully.", tasks: createdTasks });
 }

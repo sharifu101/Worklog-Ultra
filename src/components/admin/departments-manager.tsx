@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { BriefcaseBusiness, Building2, Code2, Landmark, Megaphone, PackageCheck, Settings2, ShoppingBag, Trash2, Users2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -11,7 +11,23 @@ import { Input } from "@/components/ui/input";
 type Department = {
   id: string;
   name: string;
+  memberCount: number;
+  teamHeadCount: number;
 };
+
+function getDepartmentIcon(name: string) {
+  const lowered = name.toLowerCase();
+
+  if (lowered.includes("account") || lowered.includes("finance")) return Landmark;
+  if (lowered.includes("e-commerce") || lowered.includes("sales")) return ShoppingBag;
+  if (lowered.includes("hr")) return Users2;
+  if (lowered.includes("it") || lowered.includes("technical") || lowered.includes("development")) return Code2;
+  if (lowered.includes("operation")) return Settings2;
+  if (lowered.includes("purchase") || lowered.includes("procurement")) return PackageCheck;
+  if (lowered.includes("tender")) return BriefcaseBusiness;
+  if (lowered.includes("marketing")) return Megaphone;
+  return Building2;
+}
 
 export function DepartmentsManager({ departments }: { departments: Department[] }) {
   const router = useRouter();
@@ -90,17 +106,33 @@ export function DepartmentsManager({ departments }: { departments: Department[] 
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {departments.map((department) => (
-            <div key={department.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-5 text-white">
+            <div key={department.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-5">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-white">{department.name}</p>
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                    Remove unused departments from here.
-                  </p>
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#e9f1ff] text-[#3156d3]">
+                    {(() => {
+                      const Icon = getDepartmentIcon(department.name);
+                      return <Icon className="h-5 w-5" />;
+                    })()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[var(--foreground)]">{department.name}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700">
+                        Members: {department.memberCount}
+                      </span>
+                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700">
+                        Team Heads: {department.teamHeadCount}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+                      Shift people from Users &amp; Roles. Remove only if this department is no longer needed.
+                    </p>
+                  </div>
                 </div>
                 <Button
                   aria-label={`Delete ${department.name}`}
-                  className="h-11 w-11 rounded-xl"
+                  className="h-10 w-10 rounded-xl"
                   disabled={deletingId === department.id}
                   onClick={() => deleteDepartment(department)}
                   size="icon"

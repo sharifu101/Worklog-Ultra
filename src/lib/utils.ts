@@ -114,6 +114,11 @@ export function toDateTimeInputValue(value: Date | string = new Date()) {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
+export function toDhakaOffsetIso(value: Date | string = new Date()) {
+  const parts = getDhakaDateParts(value);
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00+06:00`;
+}
+
 export function formatDateTimeInDhaka(value?: Date | string | null) {
   if (!value) return "Not set";
 

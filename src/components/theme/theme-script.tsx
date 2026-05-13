@@ -1,14 +1,26 @@
-import Script from "next/script";
+"use client";
 
-const script = `
-(() => {
-  const key = "worklog-theme";
-  const stored = window.localStorage.getItem(key);
-  const theme = stored === "light" || stored === "dark" ? stored : "dark";
+import { useEffect } from "react";
+
+type ThemeMode = "dark" | "light";
+
+function applyTheme(theme: ThemeMode) {
   document.documentElement.dataset.theme = theme;
-})();
-`;
+  document.documentElement.style.colorScheme = theme;
+  document.documentElement.style.backgroundColor = theme === "dark" ? "#0f1725" : "#eef3fb";
+  document.body?.style.setProperty("background-color", theme === "dark" ? "#0f1725" : "#eef3fb");
+}
 
 export function ThemeScript() {
-  return <Script dangerouslySetInnerHTML={{ __html: script }} id="worklog-theme-script" strategy="afterInteractive" />;
+  useEffect(() => {
+    const key = "worklog-theme";
+    const storedTheme = window.localStorage.getItem(key);
+    const theme: ThemeMode = storedTheme === "dark" || storedTheme === "light" ? storedTheme : "light";
+
+    applyTheme(theme);
+    window.localStorage.setItem(key, theme);
+    window.dispatchEvent(new Event("worklog-theme-change"));
+  }, []);
+
+  return null;
 }

@@ -25,9 +25,7 @@ export async function POST(request: NextRequest) {
     return apiError("Department is required for this account.");
   }
 
-  if (user.role === "employee" && (!payload.monthlySalary || payload.monthlySalary <= 0)) {
-    return apiError("Employee salary is required before analytics and work value tracking can be enabled.");
-  }
+  const canManageCompensation = user.role === "manager" || user.role === "admin";
 
   const updatedUser = await db.user.update({
     where: { id: user.id },
@@ -38,8 +36,8 @@ export async function POST(request: NextRequest) {
       location: payload.location || null,
       avatarUrl: nextAvatarUrl,
       expectedDailyHours:
-        typeof payload.expectedDailyHours === "number" ? payload.expectedDailyHours : undefined,
-      monthlySalary: typeof payload.monthlySalary === "number" ? payload.monthlySalary : undefined,
+        canManageCompensation && typeof payload.expectedDailyHours === "number" ? payload.expectedDailyHours : undefined,
+      monthlySalary: canManageCompensation && typeof payload.monthlySalary === "number" ? payload.monthlySalary : undefined,
       departmentId,
     },
     include: {

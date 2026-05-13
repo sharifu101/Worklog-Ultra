@@ -6,13 +6,13 @@ export function AppToaster() {
   return (
     <Toaster
       richColors
-      theme="dark"
+      theme="light"
       position="top-right"
       toastOptions={{
         className: "!border !border-[var(--panel-border)] !bg-[var(--panel)] !text-[var(--foreground)]",
         classNames: {
           success:
-            "!border !border-emerald-400/35 !bg-emerald-500/14 !text-emerald-100",
+            "!border !border-emerald-300 !bg-emerald-50 !text-emerald-700",
         },
       }}
     />

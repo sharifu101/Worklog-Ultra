@@ -8,6 +8,7 @@ import { ResetPasswordForm } from "@/components/auth/reset-password-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { parseApiResponse } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 export function ForgotPasswordForm({ variant = "default" }: { variant?: "default" | "minimal" }) {
@@ -24,8 +25,7 @@ export function ForgotPasswordForm({ variant = "default" }: { variant?: "default
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
     });
-    const raw = await response.text();
-    const result = raw ? JSON.parse(raw) : { message: "Password reset request failed." };
+    const result = await parseApiResponse<{ message: string }>(response, "Password reset request failed.");
     setLoading(false);
 
     if (!response.ok) {

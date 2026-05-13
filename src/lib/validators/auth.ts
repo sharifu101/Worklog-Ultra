@@ -21,10 +21,8 @@ export const verifyRegistrationSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  role: roleSchema,
   email: emailField,
   password: z.string().min(8, "Password must be at least 8 characters."),
-  accessCode: z.string().optional().or(z.literal("")),
   remember: z.coerce.boolean().optional().default(false),
 });
 

@@ -2,7 +2,6 @@ import { HistoryTable } from "@/components/dashboard/history-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireEmployee } from "@/lib/auth/server";
 import { getHistoryData, getPendingReportEditRequests } from "@/lib/worklog";
-import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +11,6 @@ export default async function HistoryPage({
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
   const user = await requireEmployee();
-  if (user.role === "admin") {
-    redirect("/admin");
-  }
   const { from, to } = await searchParams;
   const [history, pendingApprovals] = await Promise.all([
     getHistoryData(user.id, from, to),

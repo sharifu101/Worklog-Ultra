@@ -1,10 +1,16 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess } from "@/lib/api";
-import { requireAdminOrManager } from "@/lib/auth/server";
+import { canManageDepartments } from "@/lib/auth/permissions";
+import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
-  await requireAdminOrManager();
+  const user = await requireUser();
+
+  if (!canManageDepartments(user)) {
+    return apiError("You do not have permission to manage departments.", 403);
+  }
+
   const body = await request.json();
   const name = String(body.name ?? "").trim();
 
@@ -36,7 +42,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  await requireAdminOrManager();
+  const user = await requireUser();
+
+  if (!canManageDepartments(user)) {
+    return apiError("You do not have permission to manage departments.", 403);
+  }
 
   const body = await request.json().catch(() => ({}));
   const departmentId = String(body.id ?? "").trim();

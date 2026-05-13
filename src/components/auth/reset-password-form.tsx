@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { parseApiResponse } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 export function ResetPasswordForm({
@@ -46,8 +47,7 @@ export function ResetPasswordForm({
         password,
       }),
     });
-    const raw = await response.text();
-    const result = raw ? JSON.parse(raw) : { message: "Password reset failed." };
+    const result = await parseApiResponse<{ message: string }>(response, "Password reset failed.");
     setLoading(false);
 
     if (!response.ok) {

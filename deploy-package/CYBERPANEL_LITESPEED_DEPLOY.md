@@ -151,5 +151,8 @@ Whenever you update:
 1. build locally
 2. recreate `final-upload`
 3. upload `backend`
-4. do not overwrite uploads unless needed
-5. restart Node app
+4. keep the same production database
+5. run `npx prisma db push`
+6. do not overwrite `public/uploads` unless needed
+7. do not restore the SQL dump again during a normal update
+8. restart Node app

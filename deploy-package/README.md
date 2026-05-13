@@ -51,7 +51,7 @@ npm start
 Recommended:
 - create a PostgreSQL database
 - set `DATABASE_URL`
-- run:
+- for first setup and normal updates run:
 
 ```bash
 npx prisma db push
@@ -70,6 +70,17 @@ These directories must survive redeploys:
 - `public/uploads/messages`
 
 If your hosting wipes files on deploy, mount these as persistent storage.
+
+## Safe Update Rules
+
+When you upload a new version:
+- keep using the same production PostgreSQL database
+- do not import `worklog-db.sql` again on every update
+- do not run any reset command
+- run only schema-safe update commands such as `npx prisma db push`
+- keep the live `public/uploads` folder untouched
+
+This keeps old users, reports, messages, and uploads in place.
 
 ## What Admin Uploads
 

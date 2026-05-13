@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess } from "@/lib/api";
-import { getRoleAccessCode, roleNeedsAccessCode } from "@/lib/auth/access";
 import { verifyPassword } from "@/lib/auth/password";
 import { createUserSession } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -17,13 +16,6 @@ export async function POST(request: NextRequest) {
 
   const payload = parsed.data;
 
-  if (roleNeedsAccessCode(payload.role)) {
-    const expected = getRoleAccessCode(payload.role);
-    if (!expected || expected !== payload.accessCode) {
-      return apiError("Access code is invalid for the selected role.");
-    }
-  }
-
   const user = await db.user.findUnique({ where: { email: payload.email } });
 
   if (!user) {
@@ -32,10 +24,6 @@ export async function POST(request: NextRequest) {
 
   if (!user.isActive) {
     return apiError("This account is currently deactivated. Please contact your Team Head or CEO/Admin.");
-  }
-
-  if (user.role !== payload.role) {
-    return apiError("Please login using your registered role.");
   }
 
   const passwordMatches = await verifyPassword(payload.password, user.passwordHash);

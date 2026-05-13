@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { readTaskTimerSnapshot, writeTaskTimerSnapshot } from "@/lib/task-timer-storage";
 import { toDateTimeInputValue } from "@/lib/utils";
 
 type ReportTask = {
@@ -35,6 +36,7 @@ type ReportUpdateState = {
   actualStart: string;
   actualEnd: string;
   difficultyLevel: string;
+  carryForward: boolean;
   timerState: "idle" | "running" | "paused" | "stopped";
   runningStartedAt: string;
 };
@@ -56,33 +58,52 @@ function createBaseUpdates(tasks: ReportTask[]): ReportUpdateState[] {
     actualStart: toInputDateTime(task.updates[0]?.actualStart),
     actualEnd: toInputDateTime(task.updates[0]?.actualEnd),
     difficultyLevel: task.updates[0]?.difficultyLevel ?? "",
-    timerState: "idle",
+    carryForward: false,
+    timerState:
+      "idle",
     runningStartedAt: "",
   }));
 }
 
-function mergeStoredUpdates(baseUpdates: ReportUpdateState[], storageKey: string) {
+function mergeStoredUpdates(baseUpdates: ReportUpdateState[], storageKey: string, reportDate: string) {
   if (typeof window === "undefined") {
     return baseUpdates;
   }
 
   const raw = window.localStorage.getItem(storageKey);
-  if (!raw) {
-    return baseUpdates;
-  }
 
   try {
-    const parsed = JSON.parse(raw) as Array<Partial<ReportUpdateState>>;
+    const parsed = raw ? (JSON.parse(raw) as Array<Partial<ReportUpdateState>>) : [];
     const storedByTaskId = new Map(
       parsed
         .filter((item) => typeof item.dailyTaskId === "string")
         .map((item) => [item.dailyTaskId as string, sanitizeStoredUpdate(item)]),
     );
 
-    return baseUpdates.map((item) => ({
-      ...item,
-      ...(storedByTaskId.get(item.dailyTaskId) ?? {}),
-    }));
+    return baseUpdates.map((item) => {
+      const sharedTimer = readTaskTimerSnapshot(reportDate, item.dailyTaskId);
+      return {
+        ...item,
+        ...(sharedTimer
+          ? {
+              status: sharedTimer.status,
+              trackedMinutes: sharedTimer.trackedMinutes,
+              actualStart: sharedTimer.actualStart,
+              actualEnd: sharedTimer.actualEnd,
+              runningStartedAt: sharedTimer.runningStartedAt,
+              timerState:
+                sharedTimer.runningStartedAt
+                  ? "running"
+                  : sharedTimer.actualEnd
+                    ? "stopped"
+                    : sharedTimer.status === "in_progress"
+                      ? "paused"
+                      : item.timerState,
+            }
+          : {}),
+        ...(storedByTaskId.get(item.dailyTaskId) ?? {}),
+      };
+    });
   } catch {
     return baseUpdates;
   }
@@ -100,6 +121,7 @@ function sanitizeStoredUpdate(value: Partial<ReportUpdateState>): Partial<Report
     actualStart: typeof value.actualStart === "string" ? value.actualStart : undefined,
     actualEnd: typeof value.actualEnd === "string" ? value.actualEnd : undefined,
     difficultyLevel: typeof value.difficultyLevel === "string" ? value.difficultyLevel : undefined,
+    carryForward: typeof value.carryForward === "boolean" ? value.carryForward : undefined,
     timerState:
       value.timerState === "idle" ||
       value.timerState === "running" ||
@@ -109,6 +131,16 @@ function sanitizeStoredUpdate(value: Partial<ReportUpdateState>): Partial<Report
         : undefined,
     runningStartedAt: typeof value.runningStartedAt === "string" ? value.runningStartedAt : undefined,
   };
+}
+
+function mirrorSharedTimer(reportDate: string, item: ReportUpdateState) {
+  writeTaskTimerSnapshot(reportDate, item.dailyTaskId, {
+    status: item.status,
+    trackedMinutes: item.trackedMinutes,
+    actualStart: item.actualStart,
+    actualEnd: item.actualEnd,
+    runningStartedAt: item.runningStartedAt,
+  });
 }
 
 function calculateManualTrackedMinutes(actualStart: string, actualEnd: string) {
@@ -130,13 +162,17 @@ export function ReportForm({
   tasks,
   reportDate,
   canEdit,
+  currentUserId,
+  onSaved,
 }: {
   tasks: ReportTask[];
   reportDate: string;
   canEdit: boolean;
+  currentUserId: string;
+  onSaved?: () => void;
 }) {
   const router = useRouter();
-  const storageKey = useMemo(() => `${REPORT_STORAGE_PREFIX}:${reportDate}`, [reportDate]);
+  const storageKey = useMemo(() => `${REPORT_STORAGE_PREFIX}:${currentUserId}:${reportDate}`, [currentUserId, reportDate]);
   const storageLoadedRef = useRef(false);
   const isHydrated = useSyncExternalStore(
     () => () => {},
@@ -158,12 +194,12 @@ export function ReportForm({
       return;
     }
 
-    const nextUpdates = mergeStoredUpdates(createBaseUpdates(tasks), storageKey);
+    const nextUpdates = mergeStoredUpdates(createBaseUpdates(tasks), storageKey, reportDate);
     queueMicrotask(() => {
       storageLoadedRef.current = true;
       setUpdates(nextUpdates);
     });
-  }, [isHydrated, storageKey, tasks]);
+  }, [isHydrated, reportDate, storageKey, tasks]);
 
   useEffect(() => {
     if (!isHydrated || typeof window === "undefined" || !storageLoadedRef.current) {
@@ -184,16 +220,33 @@ export function ReportForm({
       actualStart: item.actualStart,
       actualEnd: item.actualEnd,
       difficultyLevel: item.difficultyLevel,
+      carryForward: item.carryForward,
       timerState: item.timerState,
       runningStartedAt: item.runningStartedAt,
     }));
 
     window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
-  }, [isHydrated, storageKey, updates]);
+
+    for (const item of updates) {
+      writeTaskTimerSnapshot(reportDate, item.dailyTaskId, {
+        status: item.status,
+        trackedMinutes: item.trackedMinutes,
+        actualStart: item.actualStart,
+        actualEnd: item.actualEnd,
+        runningStartedAt: item.runningStartedAt,
+      });
+    }
+  }, [isHydrated, reportDate, storageKey, updates]);
 
   function patch(index: number, key: keyof ReportUpdateState, value: string) {
     setUpdates((current) =>
       current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)),
+    );
+  }
+
+  function patchCarryForward(index: number, value: boolean) {
+    setUpdates((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, carryForward: value } : item)),
     );
   }
 
@@ -257,6 +310,7 @@ export function ReportForm({
       actualStart: item.actualStart,
       actualEnd: item.actualEnd,
       difficultyLevel: item.difficultyLevel,
+      carryForward: item.carryForward,
     }));
   }
 
@@ -296,6 +350,10 @@ export function ReportForm({
       router.refresh();
     }
 
+    if (!options?.silent) {
+      onSaved?.();
+    }
+
     return true;
   }
 
@@ -330,21 +388,26 @@ export function ReportForm({
         };
       }
 
-      return {
-        ...item,
-        status: nextState === "stopped" ? ("done" as const) : item.status,
+        return {
+          ...item,
+          status: nextState === "stopped" ? ("done" as const) : item.status,
         completionPercent:
           nextState === "stopped" && Number(item.completionPercent || 0) === 0
             ? "100"
             : item.completionPercent,
-        trackedMinutes: String(liveMinutes),
-        actualEnd: nextState === "stopped" ? timestampInputValue : item.actualEnd,
-        timerState: nextState,
-        runningStartedAt: "",
-      };
+          trackedMinutes: String(liveMinutes),
+          actualEnd: nextState === "stopped" ? timestampInputValue : item.actualEnd,
+          carryForward: nextState === "stopped" ? false : item.carryForward,
+          timerState: nextState,
+          runningStartedAt: "",
+        };
     });
 
     setUpdates(nextUpdates);
+    const target = nextUpdates[index];
+    if (target) {
+      mirrorSharedTimer(reportDate, target);
+    }
 
     if (nextState === "stopped") {
       await persistReport(nextUpdates, { silent: true, refresh: false });
@@ -354,22 +417,30 @@ export function ReportForm({
   function resetTimer(index: number) {
     if (!canEdit) return;
 
-    setUpdates((current) =>
-      current.map((item, itemIndex) =>
+    setUpdates((current) => {
+      const nextUpdates: ReportUpdateState[] = current.map((item, itemIndex) =>
         itemIndex === index
           ? {
               ...item,
-              status: "pending",
+              status: "pending" as const,
               completionPercent: "0",
               trackedMinutes: "0",
               actualStart: "",
               actualEnd: "",
-              timerState: "idle",
+              carryForward: false,
+              timerState: "idle" as const,
               runningStartedAt: "",
             }
           : item,
-      ),
-    );
+      );
+
+      const target = nextUpdates[index];
+      if (target) {
+        mirrorSharedTimer(reportDate, target);
+      }
+
+      return nextUpdates;
+    });
   }
 
   async function endNow(index: number) {
@@ -385,12 +456,17 @@ export function ReportForm({
             completionPercent: Number(item.completionPercent || 0) === 0 ? "100" : item.completionPercent,
             trackedMinutes: String(Math.floor(currentTrackedSecondsFor(item) / 60)),
             timerState: "stopped" as const,
+            carryForward: false,
             runningStartedAt: "",
           }
         : item,
     );
 
     setUpdates(nextUpdates);
+    const target = nextUpdates[index];
+    if (target) {
+      mirrorSharedTimer(reportDate, target);
+    }
     await persistReport(nextUpdates, { silent: true, refresh: false });
   }
 
@@ -561,6 +637,7 @@ export function ReportForm({
                 value={updates[index]?.note}
               />
             </div>
+
           </div>
         ))}
 

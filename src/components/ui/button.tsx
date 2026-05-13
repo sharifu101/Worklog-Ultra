@@ -8,7 +8,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-[var(--ring)] px-4 py-2 text-white hover:bg-[#5683ff]",
+          "button-force-white border-transparent bg-[var(--ring)] px-4 py-2 text-white hover:bg-[#5683ff]",
         secondary:
           "border-[var(--panel-border)] bg-[var(--panel-alt)] px-4 py-2 text-[var(--foreground)] hover:bg-[#2a3c55]",
         outline:
@@ -16,7 +16,7 @@ const buttonVariants = cva(
         ghost:
           "border-transparent bg-transparent px-3 py-2 text-[var(--muted-foreground)] hover:bg-[var(--panel-alt)] hover:text-[var(--foreground)]",
         danger:
-          "border-transparent bg-[var(--danger)] px-4 py-2 text-white hover:bg-[#e26f80]",
+          "button-force-white border-transparent bg-[var(--danger)] px-4 py-2 text-white hover:bg-[#e26f80]",
       },
       size: {
         default: "h-10",

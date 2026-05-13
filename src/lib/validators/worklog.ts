@@ -10,6 +10,7 @@ export const dailyTaskSchema = z.object({
   taskDescription: z.string().trim().optional().or(z.literal("")),
   priority: taskPrioritySchema.default("normal"),
   departmentId: z.string().uuid("Department is required."),
+  assigneeId: z.string().uuid("Choose who will own this task.").optional(),
 });
 
 export const planSubmissionSchema = z.object({
@@ -26,6 +27,7 @@ export const reportUpdateSchema = z.object({
   actualStart: z.string().optional().or(z.literal("")),
   actualEnd: z.string().optional().or(z.literal("")),
   difficultyLevel: z.string().trim().optional().or(z.literal("")),
+  carryForward: z.coerce.boolean().optional().default(false),
 });
 
 export const reportSubmissionSchema = z.object({

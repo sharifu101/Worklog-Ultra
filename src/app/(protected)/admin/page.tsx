@@ -1,3 +1,4 @@
+import { BriefcaseBusiness, Building2, CircleDollarSign, Code2, Landmark, Megaphone, PackageCheck, Settings2, ShoppingBag, Users2 } from "lucide-react";
 import { UserStatusToggle } from "@/components/admin/user-status-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,20 @@ import { getAdminOverview } from "@/lib/worklog";
 import { formatCurrency, formatDateTimeInDhaka, formatMinutes } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+function getDepartmentIcon(name: string) {
+  const lowered = name.toLowerCase();
+
+  if (lowered.includes("account") || lowered.includes("finance")) return Landmark;
+  if (lowered.includes("e-commerce") || lowered.includes("sales")) return ShoppingBag;
+  if (lowered.includes("hr")) return Users2;
+  if (lowered.includes("it") || lowered.includes("technical") || lowered.includes("development")) return Code2;
+  if (lowered.includes("operation")) return Settings2;
+  if (lowered.includes("purchase") || lowered.includes("procurement")) return PackageCheck;
+  if (lowered.includes("tender")) return BriefcaseBusiness;
+  if (lowered.includes("marketing")) return Megaphone;
+  return Building2;
+}
 
 export default async function AdminPage() {
   const actor = await requireAdminOrManager();
@@ -84,7 +99,7 @@ export default async function AdminPage() {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    <Badge variant={user.isActive ? "success" : "secondary"}>
+                    <Badge variant={user.isActive ? "warning" : "secondary"}>
                       {user.isActive ? "Active" : "Inactive"}
                     </Badge>
                     <Badge>{roleUiTitle(user.role)}</Badge>
@@ -105,11 +120,20 @@ export default async function AdminPage() {
             <CardTitle>Departments</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {departments.map((department) => (
-              <div key={department.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 text-white">
-                {department.name}
+            {departments.map((department) => {
+              const Icon = getDepartmentIcon(department.name);
+
+              return (
+              <div key={department.id} className="flex items-center gap-3 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 text-[var(--foreground)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-semibold">{department.name}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Department workspace</p>
+                </div>
               </div>
-            ))}
+            )})}
           </CardContent>
         </Card>
 
@@ -136,8 +160,17 @@ export default async function AdminPage() {
                     <p className="mt-2 line-clamp-1 text-sm text-[var(--muted-foreground)]">{report.latestTaskTitle}</p>
                     <div className="mt-3 grid gap-1 text-xs text-[var(--muted-foreground)]">
                       <p>{report.totalReports} reports - {report.totalTrackedMinutes} min tracked</p>
-                      <p>{formatCurrency(report.totalWorkValue)} today - {formatCurrency(report.hourlyRate)}/hour</p>
-                      <p>{formatCurrency(report.dailyRate)}/day - {formatCurrency(report.weeklyRate)}/week</p>
+                      <p>
+                        <span className="font-semibold text-emerald-600 dark:text-emerald-300">{formatCurrency(report.totalWorkValue)}</span>
+                        <span className="text-[var(--muted-foreground)]"> today</span>
+                        <span className="text-[var(--muted-foreground)]"> - </span>
+                        <span className="font-semibold text-blue-600 dark:text-blue-300">{formatCurrency(report.hourlyRate)}/hour</span>
+                      </p>
+                      <p>
+                        <span className="font-semibold text-amber-600 dark:text-amber-300">{formatCurrency(report.dailyRate)}/day</span>
+                        <span className="text-[var(--muted-foreground)]"> - </span>
+                        <span className="font-semibold text-violet-600 dark:text-violet-300">{formatCurrency(report.weeklyRate)}/week</span>
+                      </p>
                       <p>Start: {formatDateTimeInDhaka(report.latestStart)} - End: {formatDateTimeInDhaka(report.latestEnd)}</p>
                     </div>
                   </div>
