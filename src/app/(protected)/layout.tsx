@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/server";
 import { roleUiTitle } from "@/lib/auth/roles";
 import {
   getAssignmentNotificationCount,
+  getIncomingAssignmentNotificationCount,
   getCurrentUserAttendanceSnapshot,
   getNoticeNotificationCount,
   getRequestNotificationCount,
@@ -18,10 +19,11 @@ export default async function ProtectedLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireUser();
-  const [unreadMessages, requestNotifications, assignmentNotifications, noticeNotifications, attendanceSnapshot] = await Promise.all([
+  const [unreadMessages, requestNotifications, assignmentNotifications, incomingAssignmentNotifications, noticeNotifications, attendanceSnapshot] = await Promise.all([
     getUnreadMessageCount(user.id),
     getRequestNotificationCount(user),
     getAssignmentNotificationCount(user.id),
+    getIncomingAssignmentNotificationCount(user.id),
     getNoticeNotificationCount({ id: user.id, departmentId: user.departmentId }),
     getCurrentUserAttendanceSnapshot(user.id),
   ]);
@@ -36,7 +38,7 @@ export default async function ProtectedLayout({
             designation: user.designation,
             avatarUrl: user.avatarUrl,
             extraAccess: user.extraAccess,
-            assignmentNotifications,
+            assignmentNotifications: incomingAssignmentNotifications,
           }}
         />
         <div className="flex h-screen min-w-0 flex-1 flex-col overflow-y-auto">

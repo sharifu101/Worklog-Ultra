@@ -232,6 +232,25 @@ export async function getAssignmentNotificationCount(userId: string) {
   return notifications.length;
 }
 
+export async function getIncomingAssignmentNotificationCount(userId: string) {
+  const today = toDateOnly();
+
+  const count = await db.dailyTask.count({
+    where: {
+      userId,
+      assignedBy: {
+        not: null,
+      },
+      planDate: {
+        gte: startOfDay(new Date(today)),
+        lte: endOfDay(new Date(today)),
+      },
+    },
+  });
+
+  return count;
+}
+
 export async function getAssignmentNotifications(userId: string) {
   const today = toDateOnly();
 
