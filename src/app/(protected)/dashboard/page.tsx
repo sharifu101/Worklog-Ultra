@@ -301,7 +301,7 @@ export default async function DashboardPage() {
   const editAccess = await canUserEditReportDate(
     { id: user.id, role: user.role },
     new Date(reportDate),
-    reportTasks.map((task) => task.id),
+    (reportTasks ?? []).map((task) => task.id),
   );
 
   const today = new Date();
@@ -381,7 +381,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-4">
       <DashboardTaskNotifier
-        tasks={data.tasks.map((task) => ({
+        tasks={(data.tasks ?? []).map((task) => ({
           id: task.id,
           title: task.taskTitle,
           status: task.updates[0]?.status ?? "pending",
@@ -404,10 +404,10 @@ export default async function DashboardPage() {
             initialTasks={[]}
             assignableUsers={assignableUsers}
             reportDate={reportDate}
-            reportTasks={reportTasks.map((task) => ({
+            reportTasks={(reportTasks ?? []).map((task) => ({
               id: task.id,
               taskTitle: task.taskTitle,
-              updates: task.updates.map((update) => ({
+              updates: (task.updates ?? []).map((update) => ({
                 status: update.status,
                 note: update.note,
                 completionPercent: update.completionPercent,
@@ -418,7 +418,7 @@ export default async function DashboardPage() {
               })),
             }))}
             role={user.role}
-            suggestions={suggestions}
+            suggestions={suggestions ?? []}
             userDepartmentId={user.departmentId}
           />
           <div className="shrink-0">
@@ -495,8 +495,8 @@ export default async function DashboardPage() {
             allowOtherDepartment={user.role === "admin"}
             currentUserDepartmentId={user.departmentId || departments[0]?.id || ""}
             currentUserId={user.id}
-            departments={departments}
-            existingTaskTitles={activeTasks.map((task) => task.taskTitle)}
+            departments={departments ?? []}
+            existingTaskTitles={(activeTasks ?? []).map((task) => task.taskTitle)}
           />
 
           <div className="overflow-hidden rounded-[28px] border border-[var(--panel-border)] bg-[var(--panel)] shadow-[var(--shadow)]">

@@ -159,7 +159,7 @@ function calculateManualTrackedMinutes(actualStart: string, actualEnd: string) {
 }
 
 export function ReportForm({
-  tasks,
+  tasks = [],
   reportDate,
   canEdit,
   currentUserId,
@@ -492,7 +492,7 @@ export function ReportForm({
           </div>
         </div>
 
-        {tasks.map((task, index) => (
+        {(tasks ?? []).map((task, index) => (
           <div key={task.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <p className="text-base font-semibold text-white">{task.taskTitle}</p>

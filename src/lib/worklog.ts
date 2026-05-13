@@ -72,7 +72,8 @@ const DEPARTMENT_TASK_TEMPLATES: Array<{
 ];
 
 export async function getDepartments() {
-  return db.department.findMany({ orderBy: { name: "asc" } });
+  const departments = await db.department.findMany({ orderBy: { name: "asc" } });
+  return departments ?? [];
 }
 
 export async function getAssignableUsers() {
@@ -82,7 +83,7 @@ export async function getAssignableUsers() {
     orderBy: [{ department: { name: "asc" } }, { name: "asc" }],
   });
 
-  return users.map((user) => ({
+  return (users ?? []).map((user) => ({
     id: user.id,
     name: user.name,
     role: user.role,
@@ -199,7 +200,7 @@ export async function getAssignmentsData(userId: string) {
             : null,
         }
       : null,
-    updates: task.updates.map((update) => ({
+    updates: (task.updates ?? []).map((update) => ({
       status: update.status,
       note: update.note,
       trackedMinutes: update.trackedMinutes,
@@ -222,8 +223,8 @@ export async function getAssignmentsData(userId: string) {
   });
 
   return {
-    assignedByMe: assignedByMe.map(serializeAssignmentTask),
-    assignedToMe: assignedToMe.map(serializeAssignmentTask),
+    assignedByMe: (assignedByMe ?? []).map(serializeAssignmentTask),
+    assignedToMe: (assignedToMe ?? []).map(serializeAssignmentTask),
   };
 }
 
@@ -533,17 +534,17 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
   return {
     kpis: {
       activeStaff,
-      tasksPlanned: tasks.length,
+      tasksPlanned: (tasks ?? []).length,
       reportsSubmitted,
       worklogHours: formatHours(trackedMinutes),
       pendingItems,
     },
-    tasks,
-    recentTrend,
+    tasks: tasks ?? [],
+    recentTrend: recentTrend ?? [],
     performanceSpotlights: {
       topPerformer,
       steadyPerformer,
-      members: sortedPerformanceMembers,
+      members: sortedPerformanceMembers ?? [],
     },
   };
 }
@@ -554,7 +555,7 @@ export async function getPlanWithReports(
   options?: { includeAssigned?: boolean },
 ) {
   const day = toDateOnly(date);
-  return db.dailyTask.findMany({
+  const tasks = await db.dailyTask.findMany({
     where: {
       userId,
       ...(options?.includeAssigned ? {} : { assignedBy: null }),
@@ -566,6 +567,11 @@ export async function getPlanWithReports(
     },
     orderBy: { createdAt: "asc" },
   });
+
+  return (tasks ?? []).map((task) => ({
+    ...task,
+    updates: task.updates ?? [],
+  }));
 }
 
 export async function canUserEditReportDate(
@@ -951,7 +957,7 @@ export async function getActiveNoticesForUser(user: {
   id: string;
   departmentId?: string | null;
 }) {
-  return db.hrNotice.findMany({
+  const notices = await db.hrNotice.findMany({
     where: {
       isActive: true,
       publishedAt: { not: null },
@@ -969,6 +975,8 @@ export async function getActiveNoticesForUser(user: {
     orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
     take: 12,
   });
+
+  return notices ?? [];
 }
 
 export async function getNoticeNotificationCount(user: {
@@ -1071,9 +1079,13 @@ export async function getWorkspaceMessages(userId: string) {
     }),
   ]);
 
-  const unreadCount = inbox.filter((message) => message.recipientId === userId && !message.readAt).length;
+  const safeInbox = (inbox ?? []).map((message) => ({
+    ...message,
+    attachments: message.attachments ?? [],
+  }));
+  const unreadCount = safeInbox.filter((message) => message.recipientId === userId && !message.readAt).length;
 
-  return { contacts, inbox, unreadCount };
+  return { contacts: contacts ?? [], inbox: safeInbox, unreadCount };
 }
 
 export async function getWorkspaceDirectoryData(viewer: {
@@ -1111,7 +1123,7 @@ export async function getWorkspaceDirectoryData(viewer: {
 
   const departments = Array.from(
     new Map(
-      users.map((user) => [
+      (users ?? []).map((user) => [
         user.departmentId ?? "no-department",
         {
           id: user.departmentId ?? "no-department",
@@ -1122,10 +1134,10 @@ export async function getWorkspaceDirectoryData(viewer: {
   );
 
   return {
-    departments,
-    users: users.map((user) => {
-      const todaysPlans = user.taskOwner.map((task) => {
-        const latestUpdate = task.updates[0] ?? null;
+    departments: departments ?? [],
+    users: (users ?? []).map((user) => {
+      const todaysPlans = (user.taskOwner ?? []).map((task) => {
+        const latestUpdate = task.updates?.[0] ?? null;
 
         return {
           id: task.id,

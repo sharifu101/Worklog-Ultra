@@ -85,8 +85,8 @@ function roleLabel(role: string) {
 }
 
 export function DirectoryCenter({
-  departments,
-  users,
+  departments = [],
+  users = [],
   canSwitchDepartment,
   initialDepartmentId,
   initialUserId,
@@ -150,7 +150,7 @@ export function DirectoryCenter({
                 </SelectTrigger>
                 <SelectContent>
                   {canSwitchDepartment ? <SelectItem value="all">All departments</SelectItem> : null}
-                  {departments.map((department) => (
+                  {(departments ?? []).map((department) => (
                     <SelectItem key={department.id} value={department.id}>
                       {department.name}
                     </SelectItem>
@@ -166,7 +166,7 @@ export function DirectoryCenter({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All employees</SelectItem>
-                  {departmentScopedUsers.map((user) => (
+                  {(departmentScopedUsers ?? []).map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.name} - {user.departmentName}
                     </SelectItem>
@@ -196,7 +196,7 @@ export function DirectoryCenter({
       <CardContent className="space-y-4">
         {filteredUsers.length ? (
           <div className="space-y-4">
-            {filteredUsers.map((user) => (
+            {(filteredUsers ?? []).map((user) => (
               <section key={user.id} className="overflow-hidden rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-muted)]">
                 <div className="p-5">
                 <div className="flex items-start gap-4">
@@ -244,7 +244,7 @@ export function DirectoryCenter({
                           </tr>
                         </thead>
                         <tbody>
-                          {user.todaysPlans.map((task, index) => (
+                          {(user.todaysPlans ?? []).map((task, index) => (
                             <tr className="border-t border-[var(--panel-border)] align-top" key={task.id}>
                               <td className="px-5 py-4">
                                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#4f5ef7] text-xs font-semibold text-white">

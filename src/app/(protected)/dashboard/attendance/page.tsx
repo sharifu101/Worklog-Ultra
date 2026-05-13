@@ -8,5 +8,5 @@ export default async function AttendancePage() {
   const user = await requireUser();
   const items = await getAttendanceData(user);
 
-  return <AttendancePanel currentUserId={user.id} items={items} userRole={user.role} />;
+  return <AttendancePanel currentUserId={user.id} items={items ?? []} userRole={user.role} />;
 }

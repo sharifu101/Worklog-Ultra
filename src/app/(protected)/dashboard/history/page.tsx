@@ -24,8 +24,8 @@ export default async function HistoryPage({
       </CardHeader>
       <CardContent>
         <HistoryTable
-          history={history}
-          pendingApprovals={pendingApprovals}
+          history={history ?? []}
+          pendingApprovals={pendingApprovals ?? []}
           role={user.role}
         />
       </CardContent>

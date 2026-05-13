@@ -154,9 +154,9 @@ function parseActionResponse(raw: string) {
 }
 
 export function HistoryTable({
-  history,
+  history = [],
   role,
-  pendingApprovals,
+  pendingApprovals = [],
   mode = "history",
   initialTaskId,
   initialRequestId,
@@ -378,7 +378,7 @@ export function HistoryTable({
               </TR>
             </THead>
             <TBody>
-              {visibleHistory.map((task) => {
+              {(visibleHistory ?? []).map((task) => {
                 const latestStatus = task.updates[0]?.status;
                 const recency = getRecencyMeta(task);
 
@@ -495,7 +495,7 @@ export function HistoryTable({
                       <div className="rounded-2xl border border-violet-300/20 bg-slate-950/20 p-3">
                         <p className="text-xs uppercase tracking-[0.18em] text-violet-100">Daily Work Log</p>
                         <div className="mt-2 space-y-2">
-                          {extractContinuationMeta(selectedTask.taskDescription)?.dailyLogs.map((entry) => (
+                          {(extractContinuationMeta(selectedTask.taskDescription)?.dailyLogs ?? []).map((entry) => (
                             <div className="flex flex-wrap items-center gap-2 text-xs text-white/85" key={`${selectedTask.id}-${entry.date}`}>
                               <span className="rounded-full bg-white/10 px-2 py-1">{entry.date}</span>
                               <span>{entry.progress}% done</span>
@@ -556,7 +556,7 @@ export function HistoryTable({
               <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Employee Request</p>
                 <div className="mt-3 space-y-3">
-                  {selectedRequestReasonSections.map((section, index) => (
+                  {(selectedRequestReasonSections ?? []).map((section, index) => (
                     <div key={`${section.label}-${index}`}>
                       <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">{section.label}</p>
                       <p className="mt-1 whitespace-pre-line text-sm text-white/90">{section.value}</p>

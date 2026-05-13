@@ -23,7 +23,7 @@ export default async function ReportPage({
   const editAccess = await canUserEditReportDate(
     { id: user.id, role: user.role },
     new Date(effectiveReportDate),
-    visibleTasks.map((task: (typeof visibleTasks)[number]) => task.id),
+    (visibleTasks ?? []).map((task: (typeof visibleTasks)[number]) => task.id),
   );
 
   return (
@@ -43,11 +43,11 @@ export default async function ReportPage({
         </CardContent>
       </Card>
       <ReportForm
-        key={`${toDateOnly(selectedDate)}:${visibleTasks.map((task: (typeof visibleTasks)[number]) => task.id).join(",")}`}
+        key={`${toDateOnly(selectedDate)}:${(visibleTasks ?? []).map((task: (typeof visibleTasks)[number]) => task.id).join(",")}`}
         canEdit={editAccess.allowed}
         currentUserId={user.id}
         reportDate={effectiveReportDate}
-        tasks={visibleTasks}
+        tasks={visibleTasks ?? []}
       />
     </div>
   );

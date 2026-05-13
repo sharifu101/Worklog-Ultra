@@ -25,8 +25,8 @@ type Notice = {
 };
 
 export function NoticesCenter({
-  departments,
-  notices,
+  departments = [],
+  notices = [],
   canPublish,
 }: {
   departments: Department[];
@@ -95,7 +95,7 @@ export function NoticesCenter({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Departments</SelectItem>
-                  {departments.map((department) => (
+                  {(departments ?? []).map((department) => (
                     <SelectItem key={department.id} value={department.id}>
                       {department.name}
                     </SelectItem>
@@ -120,7 +120,7 @@ export function NoticesCenter({
         </CardHeader>
         <CardContent className="space-y-4">
           {notices.length ? (
-            notices.map((notice) => (
+            (notices ?? []).map((notice) => (
               <div key={notice.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>

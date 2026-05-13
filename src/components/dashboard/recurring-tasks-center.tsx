@@ -23,7 +23,7 @@ type Department = { id: string; name: string };
 
 export function RecurringTasksCenter({
   currentUserId: _currentUserId,
-  departments,
+  departments = [],
   userDepartmentId,
   allowOtherDepartment,
 }: {
@@ -126,7 +126,7 @@ export function RecurringTasksCenter({
                 </SelectTrigger>
                 <SelectContent>
                   {allowOtherDepartment ? <SelectItem value={OTHER_DEPARTMENT_ID}>Other</SelectItem> : null}
-                  {departments.map((department) => (
+                  {(departments ?? []).map((department) => (
                     <SelectItem key={department.id} value={department.id}>
                       {department.name}
                     </SelectItem>
@@ -243,7 +243,7 @@ export function RecurringTasksCenter({
         <CardContent>
           {templates.length ? (
             <div className="space-y-3">
-              {templates.map((template, index) => (
+              {(templates ?? []).map((template, index) => (
                 <div key={template.id} className="flex flex-col gap-3 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-start gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600">

@@ -57,7 +57,7 @@ export default async function TeamPage() {
           : "Publish Notices",
   }));
 
-  const departmentOptions = departments.map((department) => ({
+  const departmentOptions = (departments ?? []).map((department) => ({
     id: department.id,
     name: department.name,
   }));
@@ -93,7 +93,7 @@ export default async function TeamPage() {
         </div>
 
         <div className="space-y-4 lg:hidden">
-          {sortedSummaries.map((employee) => (
+          {(sortedSummaries ?? []).map((employee) => (
             <div
               className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] p-4"
               key={`mobile-${employee.id}`}
@@ -217,7 +217,7 @@ export default async function TeamPage() {
               </TR>
             </THead>
             <TBody>
-              {sortedSummaries.map((employee) => (
+              {(sortedSummaries ?? []).map((employee) => (
                 <Fragment key={employee.id}>
                   <TR className="align-top">
                     <TD>

@@ -27,10 +27,10 @@ export default async function DirectoryPage({
   return (
     <DirectoryCenter
       canSwitchDepartment={user.role === "admin"}
-      departments={data.departments}
+      departments={data.departments ?? []}
       initialDepartmentId={user.role === "admin" && !shouldScopePrivilegedViewsToDepartment(user) ? params?.departmentId : data.departments[0]?.id}
       initialUserId={params?.userId}
-      users={data.users}
+      users={data.users ?? []}
     />
   );
 }

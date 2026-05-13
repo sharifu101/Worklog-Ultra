@@ -14,7 +14,7 @@ type Department = { id: string; name: string };
 
 export function ProfileSettingsForm({
   user,
-  departments,
+  departments = [],
 }: {
   user: {
     name: string;
@@ -177,7 +177,7 @@ export function ProfileSettingsForm({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">No department</SelectItem>
-            {departments.map((department) => (
+            {(departments ?? []).map((department) => (
               <SelectItem key={department.id} value={department.id}>
                 {department.name}
               </SelectItem>

@@ -109,7 +109,7 @@ function normalizeAttendanceDateTime(value: string) {
 export function AttendancePanel({
   userRole,
   currentUserId,
-  items,
+  items = [],
 }: {
   userRole: "employee" | "hr" | "manager" | "admin";
   currentUserId: string;
@@ -293,7 +293,7 @@ export function AttendancePanel({
             <CardTitle>Team Attendance Today</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 xl:grid-cols-2">
-            {items.map((item) => (
+            {(items ?? []).map((item) => (
               <div key={item.userId} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>

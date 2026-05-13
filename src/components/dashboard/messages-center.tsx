@@ -40,8 +40,8 @@ type Message = {
 
 export function MessagesCenter({
   currentUserId,
-  contacts,
-  messages,
+  contacts = [],
+  messages = [],
 }: {
   currentUserId: string;
   contacts: Contact[];
@@ -56,7 +56,7 @@ export function MessagesCenter({
 
   const groupedMessages = useMemo(
     () =>
-      messages.map((message) => ({
+      (messages ?? []).map((message) => ({
         ...message,
         direction: message.senderId === currentUserId ? "outgoing" : "incoming",
         isUnreadIncoming: message.senderId !== currentUserId && !message.readAt,
@@ -115,7 +115,7 @@ export function MessagesCenter({
                 <SelectValue placeholder="Choose teammate" />
               </SelectTrigger>
               <SelectContent>
-                {contacts.map((contact) => (
+                {(contacts ?? []).map((contact) => (
                   <SelectItem key={contact.id} value={contact.id}>
                     {contact.name} · {contact.department?.name ?? contact.role}
                   </SelectItem>
@@ -149,7 +149,7 @@ export function MessagesCenter({
             </div>
             {attachments.length ? (
               <div className="mt-2 flex flex-wrap gap-2 text-xs text-[var(--muted-foreground)]">
-                {attachments.map((file) => (
+                {(attachments ?? []).map((file) => (
                   <span key={`${file.name}-${file.size}`} className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] px-2.5 py-1">
                     {file.name}
                   </span>
@@ -173,7 +173,7 @@ export function MessagesCenter({
         </div>
         <div className="space-y-4">
           {groupedMessages.length ? (
-            groupedMessages.map((message) => (
+            (groupedMessages ?? []).map((message) => (
               <div
                 key={message.id}
                 className={`rounded-2xl border p-4 ${
@@ -208,7 +208,7 @@ export function MessagesCenter({
                 <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">{message.body}</p>
                 {message.attachments.length ? (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {message.attachments.map((attachment) => (
+                    {(message.attachments ?? []).map((attachment) => (
                       <a
                         key={attachment.id}
                         className="inline-flex items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-3 py-1.5 text-xs font-medium text-cyan-300"

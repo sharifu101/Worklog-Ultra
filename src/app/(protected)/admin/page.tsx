@@ -85,7 +85,7 @@ export default async function AdminPage() {
             <CardTitle>Users & Roles</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {users.slice(0, 6).map((user) => (
+            {(users ?? []).slice(0, 6).map((user) => (
               <div key={user.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -120,7 +120,7 @@ export default async function AdminPage() {
             <CardTitle>Departments</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {departments.map((department) => {
+            {(departments ?? []).map((department) => {
               const Icon = getDepartmentIcon(department.name);
 
               return (
@@ -142,7 +142,7 @@ export default async function AdminPage() {
             <CardTitle>Latest Reports</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {latestReportSummaries.map((report) => (
+            {(latestReportSummaries ?? []).map((report) => (
               <div key={report.userId} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                 <div className="flex items-start gap-3">
                   <Avatar className="h-11 w-11">

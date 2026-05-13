@@ -29,7 +29,7 @@ function getDepartmentIcon(name: string) {
   return Building2;
 }
 
-export function DepartmentsManager({ departments }: { departments: Department[] }) {
+export function DepartmentsManager({ departments = [] }: { departments: Department[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -105,7 +105,7 @@ export function DepartmentsManager({ departments }: { departments: Department[] 
           <CardTitle>Active Departments</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {departments.map((department) => (
+          {(departments ?? []).map((department) => (
             <div key={department.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">

@@ -2,7 +2,7 @@
 
 import { Pause, Play, Square, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { readTaskTimerSnapshot, type SharedTaskTimerSnapshot, writeTaskTimerSnapshot } from "@/lib/task-timer-storage";
@@ -42,15 +42,6 @@ function formatDuration(totalSeconds: number) {
   return `${hours}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
 }
 
-function getTodayKey() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Dhaka",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
 export function DashboardTaskTimerAction({
   taskId,
   reportDate,
@@ -62,6 +53,7 @@ export function DashboardTaskTimerAction({
 }: DashboardTaskTimerActionProps) {
   const router = useRouter();
   const storageKey = useMemo(() => `dashboard-task-timer:${reportDate}:${taskId}`, [reportDate, taskId]);
+  const storageLoadedRef = useRef(false);
   const isHydrated = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -78,7 +70,12 @@ export function DashboardTaskTimerAction({
   const isCompleted = status === "done";
   const canStart = canEdit && !saving && !runningStartedAt;
   const canPause = canEdit && !saving && Boolean(runningStartedAt) && !isCompleted;
-  const canEnd = canEdit && !saving && (Boolean(runningStartedAt) || Boolean(actualStart)) && !isCompleted;
+  const canEnd =
+    canEdit &&
+    !saving &&
+    !isCompleted &&
+    !actualEnd &&
+    (Boolean(runningStartedAt) || Boolean(actualStart));
 
   useEffect(() => {
     setNow(Date.now());
@@ -93,6 +90,7 @@ export function DashboardTaskTimerAction({
 
     const parsed = readTaskTimerSnapshot(reportDate, taskId);
     if (!parsed) {
+      storageLoadedRef.current = true;
       return;
     }
 
@@ -113,6 +111,7 @@ export function DashboardTaskTimerAction({
       setActualStart(toInputDateTime(initialActualStart));
       setActualEnd(toInputDateTime(initialActualEnd));
       setRunningStartedAt("");
+      storageLoadedRef.current = true;
       return;
     }
 
@@ -122,6 +121,7 @@ export function DashboardTaskTimerAction({
     setActualStart(parsed.actualStart);
     setActualEnd(parsed.actualEnd);
     setRunningStartedAt(parsed.runningStartedAt);
+    storageLoadedRef.current = true;
   }, [initialActualEnd, initialActualStart, initialStatus, initialTrackedMinutes, isHydrated, reportDate, storageKey, taskId]);
 
   useEffect(() => {
@@ -150,7 +150,7 @@ export function DashboardTaskTimerAction({
   }, [canEdit, isHydrated, reportDate, runningStartedAt, status, taskId]);
 
   useEffect(() => {
-    if (!isHydrated || typeof window === "undefined") {
+    if (!isHydrated || typeof window === "undefined" || !storageLoadedRef.current) {
       return;
     }
 
@@ -272,7 +272,7 @@ export function DashboardTaskTimerAction({
     const timestampInput = toDateTimeInputValue(timestamp);
     const nextTrackedMinutes = String(Math.floor(liveTrackedSeconds / 60));
     const nextSnapshot: SharedTaskTimerSnapshot = {
-      status: "done",
+      status: "in_progress",
       trackedMinutes: nextTrackedMinutes,
       trackedSeconds: String(liveTrackedSeconds),
       actualStart: actualStart || timestampInput,
@@ -280,7 +280,7 @@ export function DashboardTaskTimerAction({
       runningStartedAt: "",
     };
 
-    setStatus("done");
+    setStatus("in_progress");
     setTrackedMinutes(nextTrackedMinutes);
     setTrackedSeconds(liveTrackedSeconds);
     setActualStart(nextSnapshot.actualStart);
@@ -288,18 +288,8 @@ export function DashboardTaskTimerAction({
     setRunningStartedAt("");
 
     writeTaskTimerSnapshot(reportDate, taskId, nextSnapshot);
-    await syncContinuation("clear_continuation");
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(
-        `task-popup-completed-event:${getTodayKey()}`,
-        JSON.stringify({
-          taskId,
-          title: "recently completed",
-          timestamp: Date.now(),
-        }),
-      );
-    }
-    await persistUpdate(nextSnapshot, { refresh: true, successMessage: "Task completed and saved." });
+    await syncContinuation("schedule_continuation");
+    await persistUpdate(nextSnapshot, { refresh: true, successMessage: "Task session saved." });
   }
 
   async function pauseTimer() {

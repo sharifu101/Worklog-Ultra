@@ -51,6 +51,10 @@ type DraftSnapshot = {
   timers: Record<string, TaskTimerState>;
 };
 
+function normalizeTaskTitle(value: string) {
+  return value.trim().toLowerCase();
+}
+
 function makeTask(defaultDepartmentId: string, defaultAssigneeId: string) {
   return {
     clientId: crypto.randomUUID(),
@@ -93,12 +97,12 @@ function mirrorSharedPlanTimer(task: Task, timer: TaskTimerState) {
 }
 
 export function PlanForm({
-  departments,
-  initialTasks,
-  suggestions,
+  departments = [],
+  initialTasks = [],
+  suggestions = [],
   userDepartmentId,
   role,
-  assignableUsers,
+  assignableUsers = [],
   currentUserId,
   clearDraftOnMount = false,
   onSaved,
@@ -116,7 +120,7 @@ export function PlanForm({
   const router = useRouter();
   const fallbackDepartmentId = userDepartmentId || departments[0]?.id || "";
   const fallbackAssigneeId = currentUserId;
-  const validInitialTaskIds = new Set(initialTasks.map((task) => task.id).filter(Boolean));
+  const validInitialTaskIds = new Set((initialTasks ?? []).map((task) => task.id).filter(Boolean));
   const planDraftStorageKey = useMemo(() => `worklog-plan-draft:${currentUserId}:${toDateOnly()}`, [currentUserId]);
   const [tasks, setTasks] = useState<Task[]>(() => {
     if (typeof window !== "undefined") {
@@ -135,8 +139,8 @@ export function PlanForm({
       }
     }
 
-    return initialTasks.length
-      ? initialTasks.map((task) => ({
+    return (initialTasks ?? []).length
+      ? (initialTasks ?? []).map((task) => ({
           clientId: crypto.randomUUID(),
           ...task,
         }))
@@ -291,6 +295,13 @@ export function PlanForm({
   }
 
   function addSuggestedTask(suggestion: Suggestion) {
+    const normalizedSuggestionTitle = normalizeTaskTitle(suggestion.title);
+
+    if (tasks.some((task) => normalizeTaskTitle(task.taskTitle) === normalizedSuggestionTitle)) {
+      toast.error("This task is already in today's plan.");
+      return;
+    }
+
     setTasks((current) => {
       const blankIndex = firstBlankTaskIndex(current);
 
@@ -324,6 +335,13 @@ export function PlanForm({
   }
 
   function addRecurringTask(template: RecurringTemplate) {
+    const normalizedTemplateTitle = normalizeTaskTitle(template.taskTitle);
+
+    if (tasks.some((task) => normalizeTaskTitle(task.taskTitle) === normalizedTemplateTitle)) {
+      toast.error("This recurring task is already in today's plan.");
+      return;
+    }
+
     setTasks((current) => {
       const blankIndex = firstBlankTaskIndex(current);
       const nextTask = {
@@ -545,6 +563,12 @@ export function PlanForm({
   }
 
   async function save() {
+    const normalizedTitles = tasks.map((task) => normalizeTaskTitle(task.taskTitle)).filter(Boolean);
+    if (normalizedTitles.length !== new Set(normalizedTitles).size) {
+      toast.error("Same task was added more than once. Remove the duplicate task first.");
+      return;
+    }
+
     setLoading(true);
     const taskSnapshot = tasks.map((task) => ({
       ...task,
@@ -684,8 +708,13 @@ export function PlanForm({
         <CardContent>
           {recurringSuggestions.length ? (
             <div className="grid gap-3 xl:grid-cols-2">
-              {recurringSuggestions.map((template, index) => (
-                <div key={template.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
+              {(recurringSuggestions ?? []).map((template, index) => (
+                <button
+                  key={template.id}
+                  className="w-full cursor-pointer rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 text-left transition-all hover:-translate-y-0.5 hover:border-[#4f5ef7]/45 hover:bg-[var(--panel)] hover:shadow-[0_14px_28px_rgba(79,94,247,0.12)]"
+                  onClick={() => addRecurringTask(template)}
+                  type="button"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-[var(--foreground)]">
@@ -711,11 +740,11 @@ export function PlanForm({
                         </span>
                       </div>
                     </div>
-                    <Button className="button-force-white shrink-0 bg-[#4f5ef7] hover:bg-[#4453eb]" onClick={() => addRecurringTask(template)} type="button">
+                    <Button className="button-force-white pointer-events-none shrink-0 bg-[#4f5ef7] hover:bg-[#4453eb]" type="button">
                       Add
                     </Button>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           ) : (
@@ -765,10 +794,10 @@ export function PlanForm({
             </div>
             <div className="grid gap-3 xl:grid-cols-2">
               {suggestions.length ? (
-                suggestions.map((suggestion) => (
+                (suggestions ?? []).map((suggestion) => (
                   <button
                     key={`${suggestion.source}-${suggestion.title}`}
-                    className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-left transition-colors hover:border-cyan-400/40 hover:bg-[var(--panel)]"
+                    className="cursor-pointer rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-left transition-all hover:-translate-y-0.5 hover:border-cyan-400/50 hover:bg-[var(--panel)] hover:shadow-[0_14px_28px_rgba(34,211,238,0.12)]"
                     onClick={() => addSuggestedTask(suggestion)}
                     type="button"
                   >
@@ -821,7 +850,7 @@ export function PlanForm({
           </Button>
         </CardHeader>
           <CardContent className="space-y-4">
-            {tasks.map((task, index) => (
+            {(tasks ?? []).map((task, index) => (
             <div key={task.clientId} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
               {(() => {
                 const hasTaskTitle = task.taskTitle.trim().length > 0;
@@ -863,7 +892,7 @@ export function PlanForm({
                     </SelectTrigger>
                     <SelectContent>
                       {allowOtherDepartment ? <SelectItem value={OTHER_DEPARTMENT_ID}>Other</SelectItem> : null}
-                      {departments.map((department) => (
+                      {(departments ?? []).map((department) => (
                         <SelectItem key={department.id} value={department.id}>
                           {department.name}
                         </SelectItem>

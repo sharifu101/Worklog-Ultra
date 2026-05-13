@@ -25,7 +25,7 @@ export function UserRoleDepartmentEditor({
   initialRole,
   initialDepartmentId,
   initialExtraAccess = [],
-  departments,
+  departments = [],
   disabled = false,
   allowRoleEdit = true,
   allowAccessEdit = false,
@@ -115,7 +115,7 @@ export function UserRoleDepartmentEditor({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="none">Executive / No Dept</SelectItem>
-          {departments.map((department) => (
+          {(departments ?? []).map((department) => (
             <SelectItem key={department.id} value={department.id}>
               {department.name}
             </SelectItem>
@@ -129,7 +129,7 @@ export function UserRoleDepartmentEditor({
       </div>
       {allowAccessEdit ? (
         <div className={`flex flex-wrap ${compact ? "gap-1.5" : "gap-2"} ${layout === "inline" ? "justify-end" : ""}`}>
-          {accessOptions.map((item) => {
+          {(accessOptions ?? []).map((item) => {
             const checked = extraAccess.includes(item.key);
 
             return (

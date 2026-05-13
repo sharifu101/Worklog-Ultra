@@ -37,7 +37,7 @@ function getTodayKey() {
   }).format(new Date());
 }
 
-export function DashboardTaskNotifier({ tasks }: { tasks: NotifierTask[] }) {
+export function DashboardTaskNotifier({ tasks = [] }: { tasks: NotifierTask[] }) {
   const [popup, setPopup] = useState<PopupState | null>(null);
   const todayKey = useMemo(() => getTodayKey(), []);
 
@@ -175,7 +175,7 @@ export function DashboardTaskNotifier({ tasks }: { tasks: NotifierTask[] }) {
               </p>
               <div className="mt-5 w-full rounded-[22px] border border-[#dbe4ff] bg-[#f7f9ff] p-4 text-left">
                 <div className="space-y-2">
-                  {popup.tasks.map((task, index) => (
+                  {(popup.tasks ?? []).map((task, index) => (
                     <div
                       key={task.id}
                       className="flex items-center justify-between gap-3 rounded-2xl bg-white/90 px-3 py-2 shadow-[0_8px_20px_rgba(79,94,247,0.08)]"

@@ -20,7 +20,7 @@ export default async function AdminUsersPage() {
         <Table>
           <THead><TR><TH>Name</TH><TH>Email</TH><TH>Role</TH><TH>Department</TH><TH>Status</TH><TH>Action</TH></TR></THead>
           <TBody>
-            {users.map((user) => (
+            {(users ?? []).map((user) => (
               <TR key={user.id}>
                 <TD>{user.name}</TD>
                 <TD>{user.email}</TD>
@@ -37,7 +37,7 @@ export default async function AdminUsersPage() {
                       <UserRoleDepartmentEditor
                         allowAccessEdit={actor.role === "admin"}
                         allowRoleEdit={actor.role === "admin"}
-                        departments={departments.map((department) => ({
+                        departments={(departments ?? []).map((department) => ({
                           id: department.id,
                           name: department.name,
                         }))}

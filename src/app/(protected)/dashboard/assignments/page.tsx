@@ -14,11 +14,11 @@ export default async function AssignmentsPage() {
 
   return (
     <AssignmentsCenter
-      assignedByMe={assignments.assignedByMe}
-      assignedToMe={assignments.assignedToMe}
-      assignableUsers={assignableUsers}
+      assignedByMe={assignments.assignedByMe ?? []}
+      assignedToMe={assignments.assignedToMe ?? []}
+      assignableUsers={assignableUsers ?? []}
       currentUserId={user.id}
-      departments={departments}
+      departments={departments ?? []}
     />
   );
 }

@@ -15,8 +15,8 @@ export default async function NoticesPage() {
   return (
     <NoticesCenter
       canPublish={canPublishNotices(user)}
-      departments={departments}
-      notices={notices.map((notice) => ({
+      departments={departments ?? []}
+      notices={(notices ?? []).map((notice) => ({
         id: notice.id,
         title: notice.title,
         body: notice.body,

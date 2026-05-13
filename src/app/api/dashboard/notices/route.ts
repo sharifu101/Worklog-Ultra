@@ -13,7 +13,7 @@ export async function GET() {
   });
 
   return apiSuccess({
-    notices: notices.map((notice) => ({
+    notices: (notices ?? []).map((notice) => ({
       id: notice.id,
       title: notice.title,
       body: notice.body,

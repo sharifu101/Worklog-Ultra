@@ -32,10 +32,10 @@ export default async function PlanPage() {
         </CardContent>
       </Card>
       <PlanForm
-        assignableUsers={assignableUsers}
+        assignableUsers={assignableUsers ?? []}
         currentUserId={user.id}
-        departments={departments}
-        initialTasks={visibleTasks.map((task) => ({
+        departments={departments ?? []}
+        initialTasks={(visibleTasks ?? []).map((task) => ({
           assigneeId: task.userId,
           id: task.id,
           taskTitle: task.taskTitle,
@@ -43,7 +43,7 @@ export default async function PlanPage() {
           priority: task.priority,
           departmentId: task.departmentId,
         }))}
-        suggestions={suggestions}
+        suggestions={suggestions ?? []}
         userDepartmentId={user.departmentId}
         role={user.role}
       />

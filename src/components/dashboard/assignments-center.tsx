@@ -78,10 +78,10 @@ function statusVariant(status: "done" | "in_progress" | "pending") {
 
 export function AssignmentsCenter({
   currentUserId,
-  departments,
-  assignableUsers,
-  assignedByMe,
-  assignedToMe,
+  departments = [],
+  assignableUsers = [],
+  assignedByMe = [],
+  assignedToMe = [],
 }: {
   currentUserId: string;
   departments: Department[];
@@ -191,7 +191,7 @@ export function AssignmentsCenter({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {departments.map((department) => (
+                    {(departments ?? []).map((department) => (
                       <SelectItem key={department.id} value={department.id}>
                         {department.name}
                       </SelectItem>
@@ -206,7 +206,7 @@ export function AssignmentsCenter({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredUsers.map((member) => (
+                    {(filteredUsers ?? []).map((member) => (
                       <SelectItem key={member.id} value={member.id}>
                         {member.name} - {member.departmentName}
                       </SelectItem>
@@ -263,7 +263,7 @@ export function AssignmentsCenter({
           </CardHeader>
           <CardContent className="space-y-3">
             {assignedByMe.length ? (
-              assignedByMe.map((task) => (
+              (assignedByMe ?? []).map((task) => (
                 <div key={task.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -301,7 +301,7 @@ export function AssignmentsCenter({
           </CardHeader>
           <CardContent className="space-y-3">
             {assignedToMe.length ? (
-              assignedToMe.map((task) => (
+              (assignedToMe ?? []).map((task) => (
                 <div key={task.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>

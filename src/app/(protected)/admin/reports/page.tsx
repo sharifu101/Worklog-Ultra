@@ -17,7 +17,7 @@ export default async function AdminReportsPage() {
         <Table>
           <THead><TR><TH>Employee</TH><TH>Task</TH><TH>Status</TH><TH>Minutes</TH></TR></THead>
           <TBody>
-            {reports.map((report) => (
+            {(reports ?? []).map((report) => (
               <TR key={report.id}>
                 <TD>{report.dailyTask.user.name}</TD>
                 <TD>{report.dailyTask.taskTitle}</TD>

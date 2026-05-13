@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { CompensationEditor } from "@/components/dashboard/compensation-editor";
 import { UserStatusToggle } from "@/components/admin/user-status-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -21,75 +22,16 @@ function getInitials(name: string) {
 
 export default async function TeamPage() {
   const user = await requireHrAnalyticsAccess();
-  const tasks = await getTeamData(user.role, user.departmentId);
+  const employeeSummaries = await getTeamData(user.role, user.departmentId);
   const canViewComp = user.role === "manager" || user.role === "admin";
   const canManageUsers = user.role === "manager" || user.role === "admin";
+  const canManageComp = user.role === "manager" || user.role === "admin";
+  const sortedSummaries = [...employeeSummaries].sort((a, b) => b.workValue - a.workValue || b.trackedMinutes - a.trackedMinutes);
 
-  const employeeSummaries = Array.from(
-    tasks.reduce((map, task) => {
-      const existing = map.get(task.user.id) ?? {
-        id: task.user.id,
-        name: task.user.name,
-        role: task.user.role,
-        isActive: task.user.isActive,
-        avatarUrl: task.user.avatarUrl ?? null,
-        departmentName: task.department.name,
-        tasksPlanned: 0,
-        completedTasks: 0,
-        trackedMinutes: 0,
-        overtimeMinutes: 0,
-        workValue: 0,
-        hourlyRate: task.hourlyRate,
-        dailyRate: task.dailyRate,
-        weeklyRate: task.weeklyRate,
-        monthlySalary: Number(task.user.monthlySalary ?? 0),
-        firstStart: null as Date | null,
-        lastEnd: null as Date | null,
-      };
-
-      const update = task.updates[0];
-      existing.tasksPlanned += 1;
-      existing.completedTasks += update?.status === "done" ? 1 : 0;
-      existing.trackedMinutes += update?.trackedMinutes ?? 0;
-      existing.overtimeMinutes += task.overtimeMinutes;
-      existing.workValue += task.workValue;
-
-      if (update?.actualStart && (!existing.firstStart || update.actualStart < existing.firstStart)) {
-        existing.firstStart = update.actualStart;
-      }
-
-      if (update?.actualEnd && (!existing.lastEnd || update.actualEnd > existing.lastEnd)) {
-        existing.lastEnd = update.actualEnd;
-      }
-
-      map.set(task.user.id, existing);
-      return map;
-    }, new Map<string, {
-      id: string;
-      name: string;
-      role: "employee" | "hr" | "manager" | "admin";
-      isActive: boolean;
-      avatarUrl: string | null;
-      departmentName: string;
-      tasksPlanned: number;
-      completedTasks: number;
-      trackedMinutes: number;
-      overtimeMinutes: number;
-      workValue: number;
-      hourlyRate: number;
-      dailyRate: number;
-      weeklyRate: number;
-      monthlySalary: number;
-      firstStart: Date | null;
-      lastEnd: Date | null;
-    }>())
-      .values(),
-  ).sort((a, b) => b.workValue - a.workValue || b.trackedMinutes - a.trackedMinutes);
-
-  const totalDailyBaseline = employeeSummaries.reduce((sum, item) => sum + item.dailyRate, 0);
-  const totalWeeklyBaseline = employeeSummaries.reduce((sum, item) => sum + item.weeklyRate, 0);
-  const totalTrackedValue = employeeSummaries.reduce((sum, item) => sum + item.workValue, 0);
-  const totalTrackedMinutes = employeeSummaries.reduce((sum, item) => sum + item.trackedMinutes, 0);
+  const totalDailyBaseline = sortedSummaries.reduce((sum, item) => sum + item.dailyRate, 0);
+  const totalWeeklyBaseline = sortedSummaries.reduce((sum, item) => sum + item.weeklyRate, 0);
+  const totalTrackedValue = sortedSummaries.reduce((sum, item) => sum + item.workValue, 0);
+  const totalTrackedMinutes = sortedSummaries.reduce((sum, item) => sum + item.trackedMinutes, 0);
 
   return (
     <Card>
@@ -137,7 +79,7 @@ export default async function TeamPage() {
             </TR>
           </THead>
           <TBody>
-            {employeeSummaries.map((employee) => (
+            {sortedSummaries.map((employee) => (
               <TR key={employee.id}>
                 <TD>
                   <div className="flex items-center gap-3">
@@ -186,13 +128,22 @@ export default async function TeamPage() {
                 ) : null}
                 {canManageUsers ? (
                   <TD>
-                    {employee.role === "manager" && user.role === "manager" ? null : (
-                      <UserStatusToggle
-                        isActive={employee.isActive}
-                        userId={employee.id}
-                        userName={employee.name}
-                      />
-                    )}
+                    <div className="space-y-3">
+                      {employee.role === "manager" && user.role === "manager" ? null : (
+                        <UserStatusToggle
+                          isActive={employee.isActive}
+                          userId={employee.id}
+                          userName={employee.name}
+                        />
+                      )}
+                      {canManageComp && (user.role === "admin" || employee.role !== "admin") ? (
+                        <CompensationEditor
+                          monthlySalary={employee.monthlySalary}
+                          userId={employee.id}
+                          userName={employee.name}
+                        />
+                      ) : null}
+                    </div>
                   </TD>
                 ) : null}
               </TR>

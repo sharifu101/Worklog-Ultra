@@ -8,5 +8,5 @@ export default async function MessagesPage() {
   const user = await requireUser();
   const { contacts, inbox } = await getWorkspaceMessages(user.id);
 
-  return <MessagesCenter contacts={contacts} currentUserId={user.id} messages={inbox} />;
+  return <MessagesCenter contacts={contacts ?? []} currentUserId={user.id} messages={inbox ?? []} />;
 }

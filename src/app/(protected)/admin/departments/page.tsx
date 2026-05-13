@@ -27,7 +27,7 @@ export default async function AdminDepartmentsPage() {
 
   return (
     <DepartmentsManager
-      departments={departments.map((department) => {
+      departments={(departments ?? []).map((department) => {
         const departmentUsers = users.filter((user) => user.departmentId === department.id);
 
         return {

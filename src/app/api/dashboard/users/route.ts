@@ -16,7 +16,7 @@ export async function GET() {
   });
 
   return apiSuccess({
-    users: users.map((user) => ({
+    users: (users ?? []).map((user) => ({
       id: user.id,
       name: user.name,
       role: user.role,

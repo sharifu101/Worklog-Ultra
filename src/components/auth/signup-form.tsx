@@ -22,7 +22,7 @@ const roleLabels: Record<string, string> = {
 };
 
 export function SignupForm({
-  departments,
+  departments = [],
   variant = "default",
 }: {
   departments: Department[];
@@ -258,7 +258,7 @@ export function SignupForm({
               <SelectValue placeholder="Choose department" />
             </SelectTrigger>
             <SelectContent className={cn(isMinimal && "border-slate-300 bg-white text-slate-800 shadow-[0_20px_60px_rgba(15,23,42,0.18)]")}>
-              {departments.map((department) => (
+              {(departments ?? []).map((department) => (
                 <SelectItem
                   className={cn(isMinimal && "data-[state=checked]:bg-slate-100 data-[state=checked]:text-slate-900 data-[highlighted]:bg-[#173b71] data-[highlighted]:text-white")}
                   key={department.id}
