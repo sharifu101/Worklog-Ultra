@@ -97,7 +97,7 @@ export function DashboardWorkspaceModal({
             <div>
               <Dialog.Title className="text-lg font-bold text-[var(--foreground)]">Today&apos;s Workspace</Dialog.Title>
               <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Add tasks, save today&apos;s plan, and start task time from one popup.
+                Add tasks and save today&apos;s plan here. Start task time after it appears on the dashboard.
               </p>
             </div>
             <Dialog.Close asChild>

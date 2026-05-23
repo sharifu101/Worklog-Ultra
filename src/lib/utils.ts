@@ -13,6 +13,8 @@ export const STANDARD_WORK_DAYS_PER_WEEK = 6;
 export const STANDARD_DAILY_HOURS = 8;
 export const STANDARD_WORK_DAYS_PER_MONTH = 26;
 export const WORKLOG_TIME_ZONE = "Asia/Dhaka";
+const DHAKA_OFFSET = "+06:00";
+const DHAKA_LOCAL_DATE_TIME_PATTERN = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 export function formatMinutes(minutes: number) {
   const safeMinutes = Math.max(0, Math.round(minutes));
@@ -81,6 +83,35 @@ export function formatCurrency(amount: number) {
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
+export function normalizeDhakaDateTimeValue(value: string) {
+  const trimmed = value.trim();
+  const match = trimmed.match(DHAKA_LOCAL_DATE_TIME_PATTERN);
+
+  if (!match) {
+    return trimmed;
+  }
+
+  const [, date, hour, minute, second = "00"] = match;
+  return `${date}T${hour}:${minute}:${second}${DHAKA_OFFSET}`;
+}
+
+export function parseDhakaDateTime(value?: Date | string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsedValue =
+    typeof value === "string"
+      ? new Date(normalizeDhakaDateTimeValue(value))
+      : new Date(value);
+
+  if (Number.isNaN(parsedValue.getTime())) {
+    return null;
+  }
+
+  return parsedValue;
+}
+
 function getDhakaDateParts(value: Date | string = new Date()) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: WORKLOG_TIME_ZONE,
@@ -92,7 +123,8 @@ function getDhakaDateParts(value: Date | string = new Date()) {
     hour12: false,
   });
 
-  const parts = formatter.formatToParts(new Date(value));
+  const parsedValue = parseDhakaDateTime(value);
+  const parts = formatter.formatToParts(parsedValue ?? new Date());
   const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
 
   return {
@@ -110,6 +142,14 @@ export function toDateOnly(value: Date | string = new Date()) {
 }
 
 export function toDateTimeInputValue(value: Date | string = new Date()) {
+  if (typeof value === "string") {
+    const match = value.trim().match(DHAKA_LOCAL_DATE_TIME_PATTERN);
+    if (match) {
+      const [, date, hour, minute] = match;
+      return `${date}T${hour}:${minute}`;
+    }
+  }
+
   const parts = getDhakaDateParts(value);
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
@@ -119,8 +159,17 @@ export function toDhakaOffsetIso(value: Date | string = new Date()) {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00+06:00`;
 }
 
+export function getDhakaCutoffIso(dayKey: string, hour = 19, minute = 30) {
+  return `${dayKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+06:00`;
+}
+
 export function formatDateTimeInDhaka(value?: Date | string | null) {
   if (!value) return "Not set";
+  const parsedValue = parseDhakaDateTime(value);
+
+  if (!parsedValue) {
+    return "Not set";
+  }
 
   return new Intl.DateTimeFormat("en-BD", {
     timeZone: WORKLOG_TIME_ZONE,
@@ -130,7 +179,25 @@ export function formatDateTimeInDhaka(value?: Date | string | null) {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
-  }).format(new Date(value));
+  }).format(parsedValue);
+}
+
+export function formatTimeOnlyInDhaka(value?: Date | string | null) {
+  if (!value) {
+    return "Not set";
+  }
+
+  const parsedValue = parseDhakaDateTime(value);
+  if (!parsedValue) {
+    return "Not set";
+  }
+
+  return new Intl.DateTimeFormat("en-BD", {
+    timeZone: WORKLOG_TIME_ZONE,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(parsedValue);
 }
 
 export function getGreetingInDhaka(value: Date | string = new Date()) {

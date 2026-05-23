@@ -1,9 +1,9 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { CheckSquare, Pencil, X } from "lucide-react";
+import { CheckSquare, Pencil, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { embedHistoryMeta, isMovedToHistory, stripHistoryMeta } from "@/lib/task-history-shared";
 import { embedRecurringTaskDescription, isRecurringTaskDescription, stripRecurringTaskMeta } from "@/lib/recurring-task-templates";
+
+const AUTO_PREDICTION_TEXT = /^Predicted from your work pattern and completion history\.?\s*/i;
 
 function parseResponse(raw: string) {
   try {
@@ -25,6 +27,8 @@ export function TaskManageControls({
   task,
   compact = false,
   hideDoneAction = false,
+  showInlineDelete = false,
+  timerPanel,
 }: {
   task: {
     id: string;
@@ -34,9 +38,12 @@ export function TaskManageControls({
   };
   compact?: boolean;
   hideDoneAction?: boolean;
+  showInlineDelete?: boolean;
+  timerPanel?: ReactNode;
 }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [title, setTitle] = useState(task.taskTitle);
   const [description, setDescription] = useState(task.taskDescription ?? "");
@@ -48,7 +55,7 @@ export function TaskManageControls({
   const isAlreadyMovedToHistory = isMovedToHistory(task.taskDescription);
 
   function toEditableDescription(value?: string | null) {
-    return stripHistoryMeta(stripRecurringTaskMeta(value));
+    return stripHistoryMeta(stripRecurringTaskMeta(value)).replace(AUTO_PREDICTION_TEXT, "").trim();
   }
 
   async function saveTask() {
@@ -184,6 +191,12 @@ export function TaskManageControls({
                 <Label>Task Note</Label>
                 <Textarea onChange={(event) => setDescription(event.target.value)} rows={5} value={description} />
               </div>
+              {timerPanel ? (
+                <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Live Timer</p>
+                  {timerPanel}
+                </div>
+              ) : null}
             </div>
             <div className="flex items-center justify-between gap-3 border-t border-[var(--panel-border)] px-6 py-5">
               <Button
@@ -209,6 +222,51 @@ export function TaskManageControls({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      {showInlineDelete ? (
+        <Dialog.Root onOpenChange={setDeleteOpen} open={deleteOpen}>
+          <Dialog.Trigger asChild>
+            <Button
+              className="h-8 rounded-full px-3 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </Button>
+          </Dialog.Trigger>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm" />
+            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(440px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-[var(--panel-border)] bg-[var(--panel)] shadow-2xl outline-none">
+              <div className="space-y-4 px-6 py-6">
+                <Dialog.Title className="text-xl font-semibold text-[var(--foreground)]">Delete task</Dialog.Title>
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  This will permanently remove this task from your records.
+                </p>
+              </div>
+              <div className="flex justify-end gap-3 border-t border-[var(--panel-border)] px-6 py-5">
+                <Dialog.Close asChild>
+                  <Button type="button" variant="outline">
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <Button
+                  className="button-force-white bg-rose-600 hover:bg-rose-700"
+                  disabled={deleting}
+                  onClick={async () => {
+                    await deleteTask();
+                    setDeleteOpen(false);
+                  }}
+                  type="button"
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </Button>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      ) : null}
 
       {!hideDoneAction ? (
         <Dialog.Root onOpenChange={setDoneOpen} open={doneOpen}>

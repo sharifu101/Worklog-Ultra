@@ -100,7 +100,7 @@ export default async function TeamPage() {
             >
               <div className="flex items-start gap-3">
                 <Avatar className="h-11 w-11 border-white/10">
-                  {employee.avatarUrl ? <AvatarImage alt={employee.name} src={employee.avatarUrl} /> : null}
+                  {employee.avatar_url ? <AvatarImage alt={employee.name} src={employee.avatar_url} /> : null}
                   <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
@@ -223,7 +223,7 @@ export default async function TeamPage() {
                     <TD>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-11 w-11 border-white/10">
-                          {employee.avatarUrl ? <AvatarImage alt={employee.name} src={employee.avatarUrl} /> : null}
+                          {employee.avatar_url ? <AvatarImage alt={employee.name} src={employee.avatar_url} /> : null}
                           <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
                         </Avatar>
                         <div>

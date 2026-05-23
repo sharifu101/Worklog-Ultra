@@ -70,7 +70,7 @@ export async function sendOtpEmail({
 }) {
   return sendEmail({
     email,
-    subject: `${title} · ${getDhakaMailStamp()}`,
+    subject: `${title} - ${getDhakaMailStamp()}`,
     html: `<div style="font-family:Arial,sans-serif;color:#0f1725;line-height:1.6">
       <h2 style="margin:0 0 12px">Verify your WorkLog access</h2>
       <p style="margin:0 0 12px">Your verification code is:</p>
@@ -105,7 +105,7 @@ export async function sendPasswordResetEmail({
 }) {
   return sendEmail({
     email,
-    subject: `Your WorkLog password reset code · ${getDhakaMailStamp()}`,
+    subject: `Your WorkLog password reset code - ${getDhakaMailStamp()}`,
     html: `<div style="font-family:Arial,sans-serif;color:#0f1725;line-height:1.6">
       <h2 style="margin:0 0 12px">Reset your password</h2>
       <p style="margin:0 0 12px">We received a request to reset your WorkLog password. Use the code below to continue.</p>

@@ -66,13 +66,10 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  const showOtp =
-    process.env.NODE_ENV !== "production" &&
-    process.env.AUTH_SIGNUP_SHOW_OTP_ON_SCREEN === "true";
   const mailConfigured = isMailConfigured();
 
-  if (!mailConfigured && !showOtp) {
-    return apiError("Email delivery is not configured yet. Add Resend credentials or enable dev OTP display.", 500);
+  if (!mailConfigured) {
+    return apiError("Email delivery is not configured yet. Add valid mail credentials first.", 500);
   }
 
   if (mailConfigured) {
@@ -92,7 +89,6 @@ export async function POST(request: NextRequest) {
       message: existingUser
         ? "Verification code sent. Complete the upgrade to activate the new role."
         : "Verification code sent. Enter the 6 digit code to complete signup.",
-      otp: showOtp ? code : undefined,
     },
     201,
   );

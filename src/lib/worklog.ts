@@ -1,10 +1,11 @@
 import { ReminderKind, TaskStatus, UserRole } from "@prisma/client";
 import { endOfDay, startOfDay, subDays } from "date-fns";
+import { extractAssignmentAttachmentMeta } from "@/lib/assignment-attachments";
 import { extractAssignmentReviewReason, isAssignmentReviewReason } from "@/lib/assignment-review";
 import { db } from "@/lib/db";
 import { isMovedToHistory } from "@/lib/task-history-shared";
-import { isRecurringTaskDescription } from "@/lib/recurring-task-templates";
-import { extractContinuationMeta } from "@/lib/task-continuation";
+import { isRecurringTaskDescription, stripRecurringTaskMeta } from "@/lib/recurring-task-templates";
+import { buildContinuationDescription, extractContinuationMeta, stripContinuationMeta } from "@/lib/task-continuation";
 import {
   calculateDailyRate,
   calculateHourlyRate,
@@ -71,6 +72,40 @@ const DEPARTMENT_TASK_TEMPLATES: Array<{
   },
 ];
 
+function buildCleanSuggestionDescription(description?: string | null, departmentName?: string | null) {
+  const cleaned = stripRecurringTaskMeta(stripContinuationMeta(description))
+    .replace(/^Predicted from your work pattern and completion history\.?\s*/i, "")
+    .replace(/\s*Suggested from .* workflow baseline\.?$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (cleaned) {
+    return cleaned;
+  }
+
+  return `Suggested from ${departmentName ?? "your department"} based on earlier successful work patterns.`;
+}
+
+function normalizeSuggestionSource(source: string) {
+  if (/^Pattern repeat/i.test(source)) {
+    const match = source.match(/(\d+)/);
+    const count = Number(match?.[1] ?? 1);
+    return `Based on weekly pattern · ${count} similar day${count > 1 ? "s" : ""}`;
+  }
+
+  if (/^History repeat/i.test(source)) {
+    const match = source.match(/(\d+)/);
+    const count = Number(match?.[1] ?? 1);
+    return `Based on past work · ${count} similar task${count > 1 ? "s" : ""}`;
+  }
+
+  if (/^Department intelligence/i.test(source)) {
+    return source.replace(/^Department intelligence/i, "Department workflow idea");
+  }
+
+  return source;
+}
+
 export async function getDepartments() {
   const departments = await db.department.findMany({ orderBy: { name: "asc" } });
   return departments ?? [];
@@ -91,6 +126,121 @@ export async function getAssignableUsers() {
     departmentId: user.departmentId,
     departmentName: user.department?.name ?? "No department",
   }));
+}
+
+export async function finalizeMissedTasksForUser(userId: string) {
+  const today = toDateOnly();
+  const todayDate = new Date(today);
+
+  const [staleTasks, todayTasks] = await Promise.all([
+    db.dailyTask.findMany({
+      where: {
+        userId,
+        planDate: { lt: todayDate },
+      },
+      include: {
+        updates: {
+          orderBy: { reportDate: "desc" },
+          take: 1,
+        },
+      },
+      orderBy: [{ planDate: "asc" }, { createdAt: "asc" }],
+    }),
+    db.dailyTask.findMany({
+      where: {
+        userId,
+        planDate: todayDate,
+      },
+      select: {
+        id: true,
+        taskTitle: true,
+        taskDescription: true,
+        priority: true,
+        assignedBy: true,
+      },
+    }),
+  ]);
+
+  const todayTaskMap = new Map(
+    (todayTasks ?? []).map((task) => [task.taskTitle.trim().toLowerCase(), task]),
+  );
+
+  for (const task of staleTasks ?? []) {
+    const latestUpdate = task.updates[0] ?? null;
+
+    if (isMovedToHistory(task.taskDescription)) {
+      continue;
+    }
+
+    if (latestUpdate?.status === TaskStatus.done || latestUpdate?.completionPercent === 100) {
+      continue;
+    }
+
+    const sourceDate = toDateOnly(task.planDate);
+    const taskKey = task.taskTitle.trim().toLowerCase();
+    const existingTodayTask = todayTaskMap.get(taskKey);
+    const continuationNote = buildContinuationDescription({
+      originalDescription: existingTodayTask?.taskDescription ?? task.taskDescription,
+      sourceDate,
+      completionPercent: latestUpdate?.completionPercent ?? 0,
+      trackedMinutes: latestUpdate?.trackedMinutes ?? 0,
+      note: latestUpdate?.note ?? "",
+    });
+
+    if (existingTodayTask) {
+      await db.dailyTask.update({
+        where: { id: existingTodayTask.id },
+        data: {
+          taskDescription: continuationNote || null,
+          priority: task.priority,
+          assignedBy: task.assignedBy,
+        },
+      });
+    } else {
+      const createdTodayTask = await db.dailyTask.create({
+        data: {
+          userId: task.userId,
+          departmentId: task.departmentId,
+          planDate: todayDate,
+          taskTitle: task.taskTitle,
+          taskDescription: continuationNote || null,
+          priority: task.priority,
+          assignedBy: task.assignedBy,
+        },
+        select: {
+          id: true,
+          taskTitle: true,
+          taskDescription: true,
+          priority: true,
+          assignedBy: true,
+        },
+      });
+
+      todayTaskMap.set(taskKey, createdTodayTask);
+    }
+
+    if (
+      latestUpdate &&
+      !latestUpdate.actualEnd &&
+      (latestUpdate.actualStart ||
+        latestUpdate.trackedMinutes > 0 ||
+        latestUpdate.completionPercent > 0 ||
+        latestUpdate.note?.trim())
+    ) {
+      await db.dailyTaskUpdate.update({
+        where: {
+          dailyTaskId_reportDate: {
+            dailyTaskId: task.id,
+            reportDate: new Date(sourceDate),
+          },
+        },
+        data: {
+          actualEnd: new Date(`${sourceDate}T20:00:00+06:00`),
+          status: latestUpdate.status === TaskStatus.pending ? TaskStatus.in_progress : latestUpdate.status,
+        },
+      });
+    }
+  }
 }
 
 export async function getAssignmentsData(userId: string) {
@@ -213,7 +363,9 @@ export async function getAssignmentsData(userId: string) {
           id: task.editRequests[0].id,
           status: task.editRequests[0].status,
           submitNote: extractAssignmentReviewReason(task.editRequests[0].reason) ?? "",
-          reviewNote: task.editRequests[0].reviewNote,
+          submitAttachments: extractAssignmentAttachmentMeta(task.editRequests[0].reason).attachments,
+          reviewNote: extractAssignmentAttachmentMeta(task.editRequests[0].reviewNote).text || null,
+          reviewAttachments: extractAssignmentAttachmentMeta(task.editRequests[0].reviewNote).attachments,
           createdAt: task.editRequests[0].createdAt,
           reviewedAt: task.editRequests[0].reviewedAt,
           requestedById: task.editRequests[0].requestedById,
@@ -236,7 +388,7 @@ export async function getAssignmentNotificationCount(userId: string) {
 export async function getIncomingAssignmentNotificationCount(userId: string) {
   const today = toDateOnly();
 
-  const count = await db.dailyTask.count({
+  const tasks = await db.dailyTask.findMany({
     where: {
       userId,
       assignedBy: {
@@ -244,12 +396,18 @@ export async function getIncomingAssignmentNotificationCount(userId: string) {
       },
       planDate: {
         gte: startOfDay(new Date(today)),
-        lte: endOfDay(new Date(today)),
+          lte: endOfDay(new Date(today)),
+      },
+    },
+    include: {
+      updates: {
+        orderBy: { updatedAt: "desc" },
+        take: 1,
       },
     },
   });
 
-  return count;
+  return tasks.filter((task) => (task.updates[0]?.status ?? TaskStatus.pending) !== TaskStatus.done).length;
 }
 
 export async function getAssignmentNotifications(userId: string) {
@@ -339,16 +497,18 @@ export async function getAssignmentNotifications(userId: string) {
         task.createdAt.toISOString(),
     }));
 
-  const assigneeNotifications = tasksAssignedToMe.map((task) => ({
-    taskId: task.id,
-    taskTitle: task.taskTitle,
-    assigneeName: task.assigner?.name ?? "New assignment",
-    assigneeDepartmentName: task.assigner?.department?.name ?? task.user.department?.name ?? "No department",
-    status: task.updates[0]?.status ?? TaskStatus.pending,
-    note: task.taskDescription ?? "A new task has been assigned to you.",
-    trackedMinutes: task.updates[0]?.trackedMinutes ?? 0,
-    updatedAt: task.updates[0]?.updatedAt?.toISOString() ?? task.createdAt.toISOString(),
-  }));
+  const assigneeNotifications = tasksAssignedToMe
+    .filter((task) => (task.updates[0]?.status ?? TaskStatus.pending) !== TaskStatus.done)
+    .map((task) => ({
+      taskId: task.id,
+      taskTitle: task.taskTitle,
+      assigneeName: task.assigner?.name ?? "New assignment",
+      assigneeDepartmentName: task.assigner?.department?.name ?? task.user.department?.name ?? "No department",
+      status: task.updates[0]?.status ?? TaskStatus.pending,
+      note: task.taskDescription ?? "A new task has been assigned to you.",
+      trackedMinutes: task.updates[0]?.trackedMinutes ?? 0,
+      updatedAt: task.updates[0]?.updatedAt?.toISOString() ?? task.createdAt.toISOString(),
+    }));
 
   return [...assigneeNotifications, ...assignerNotifications].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
@@ -374,12 +534,32 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
   const dayStart = startOfDay(today);
   const dayEnd = endOfDay(today);
 
-  const taskWhere =
-    role === UserRole.employee
-      ? { userId, assignedBy: null, planDate: { gte: dayStart, lte: dayEnd } }
+  const taskWhere = {
+    userId,
+    assignedBy: null,
+    planDate: { gte: dayStart, lte: dayEnd },
+  };
+
+  const activeStaffWhere =
+    role === UserRole.admin
+      ? {
+          isActive: true,
+          role: {
+            in: [UserRole.employee, UserRole.hr, UserRole.manager],
+          },
+        }
       : role === UserRole.manager && departmentId
-        ? { departmentId, planDate: { gte: dayStart, lte: dayEnd } }
-        : { planDate: { gte: dayStart, lte: dayEnd } };
+        ? {
+            isActive: true,
+            departmentId,
+            role: {
+              in: [UserRole.employee, UserRole.hr, UserRole.manager],
+            },
+          }
+        : {
+            isActive: true,
+            id: userId,
+          };
 
   const [tasks, activeStaff, performanceUsers] = await Promise.all([
     db.dailyTask.findMany({
@@ -400,26 +580,7 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
       orderBy: { createdAt: "desc" },
     }),
     db.user.count({
-      where:
-        role === UserRole.admin
-          ? {
-              isActive: true,
-              role: {
-                in: [UserRole.employee, UserRole.hr, UserRole.manager],
-              },
-            }
-          : departmentId
-            ? {
-                isActive: true,
-                departmentId,
-                role: {
-                  in: [UserRole.employee, UserRole.hr, UserRole.manager],
-                },
-              }
-            : {
-                isActive: true,
-        id: userId,
-      },
+      where: activeStaffWhere,
     }),
     role === UserRole.employee
       ? Promise.resolve([])
@@ -468,8 +629,8 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
       const date = subDays(today, 6 - index);
       const count = await db.dailyTask.count({
         where: {
-          ...(role === UserRole.employee ? { userId } : {}),
-          ...(role === UserRole.manager && departmentId ? { departmentId } : {}),
+          userId,
+          assignedBy: null,
           planDate: { gte: startOfDay(date), lte: endOfDay(date) },
         },
       });
@@ -500,7 +661,7 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
             role: member.role,
             departmentId: member.departmentId ?? "no-department",
             departmentName: member.department?.name ?? "No department",
-            avatarUrl: member.avatarUrl ?? null,
+            avatar_url: member.avatarUrl ?? null,
             score,
             completionRate,
             trackedMinutes,
@@ -564,6 +725,15 @@ export async function getPlanWithReports(
     include: {
       updates: true,
       department: true,
+      editRequests: {
+        where: {
+          reason: {
+            startsWith: "[assignment-review]",
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -571,6 +741,18 @@ export async function getPlanWithReports(
   return (tasks ?? []).map((task) => ({
     ...task,
     updates: task.updates ?? [],
+    latestReview: task.editRequests[0]
+      ? {
+          id: task.editRequests[0].id,
+          status: task.editRequests[0].status,
+          submitNote: extractAssignmentReviewReason(task.editRequests[0].reason) ?? "",
+          reviewNote: task.editRequests[0].reviewNote,
+          createdAt: task.editRequests[0].createdAt,
+          reviewedAt: task.editRequests[0].reviewedAt,
+          requestedById: task.editRequests[0].requestedById,
+          reviewerId: task.editRequests[0].reviewerId,
+        }
+      : null,
   }));
 }
 
@@ -611,7 +793,7 @@ export async function getPlanSuggestions(userId: string, departmentId?: string |
       const key = task.taskTitle.trim().toLowerCase();
       const existing = map.get(key) ?? {
         title: task.taskTitle,
-        description: task.taskDescription ?? "Predicted from your work pattern and completion history.",
+        description: task.taskDescription ?? "",
         priority: (["low", "normal", "high", "critical"].includes(task.priority) ? task.priority : "normal") as "low" | "normal" | "high" | "critical",
         score: 0,
         count: 0,
@@ -646,9 +828,7 @@ export async function getPlanSuggestions(userId: string, departmentId?: string |
   )
     .map((item) => ({
       title: item.title,
-      description:
-        item.description ||
-        `Predicted from ${item.completedCount || item.count} earlier worklogs in ${department?.name ?? "this department"}.`,
+      description: buildCleanSuggestionDescription(item.description, department?.name),
       priority: item.priority,
       source:
         item.sameWeekdayCount > 0
@@ -676,9 +856,9 @@ export async function getPlanSuggestions(userId: string, departmentId?: string |
     .slice(0, 6)
     .map((item) => ({
       title: item.title,
-      description: item.description,
+      description: buildCleanSuggestionDescription(item.description, department?.name),
       priority: item.priority,
-      source: item.source,
+      source: normalizeSuggestionSource(item.source),
     }));
 }
 
@@ -709,7 +889,7 @@ export async function getHistoryData(userId: string, from?: string, to?: string)
     }),
   ]);
 
-  return tasks
+  const visibleTasks = tasks
     .filter((task) => {
       const isToday = toDateOnly(task.planDate) === toDateOnly();
       const isStickyDashboardTask =
@@ -718,6 +898,29 @@ export async function getHistoryData(userId: string, from?: string, to?: string)
 
       return !(isToday && isStickyDashboardTask && !archivedToHistory);
     })
+    .filter((task, index, list) => {
+      const continuationMeta = extractContinuationMeta(task.taskDescription);
+
+      if (!continuationMeta?.sourceDate) {
+        return true;
+      }
+
+      const taskKey = `${task.taskTitle.trim().toLowerCase()}::${continuationMeta.sourceDate}`;
+      const firstMatchIndex = list.findIndex((candidate) => {
+        const candidateMeta = extractContinuationMeta(candidate.taskDescription);
+
+        if (!candidateMeta?.sourceDate) {
+          return false;
+        }
+
+        const candidateKey = `${candidate.taskTitle.trim().toLowerCase()}::${candidateMeta.sourceDate}`;
+        return candidateKey === taskKey;
+      });
+
+      return firstMatchIndex === index;
+    });
+
+  return visibleTasks
     .map((task) => {
     const isToday = toDateOnly(task.planDate) === toDateOnly();
 
@@ -802,7 +1005,7 @@ export async function getTeamData(role: UserRole, departmentId?: string | null, 
       extraAccess: user.extraAccess,
       departmentId: user.departmentId,
       isActive: user.isActive,
-      avatarUrl: user.avatarUrl ?? null,
+      avatar_url: user.avatarUrl ?? null,
       departmentName: user.department?.name ?? "No department",
       tasksPlanned: memberTasks.length,
       completedTasks,
@@ -880,7 +1083,7 @@ export async function getAdminOverview() {
         userId: report.dailyTask.userId,
         name: report.dailyTask.user.name,
         role: report.dailyTask.user.role,
-        avatarUrl: report.dailyTask.user.avatarUrl,
+        avatar_url: report.dailyTask.user.avatarUrl,
         departmentName: report.dailyTask.department.name,
         totalReports: 0,
         totalTrackedMinutes: 0,
@@ -912,7 +1115,7 @@ export async function getAdminOverview() {
       userId: string;
       name: string;
       role: UserRole;
-      avatarUrl: string | null;
+      avatar_url: string | null;
       departmentName: string;
       totalReports: number;
       totalTrackedMinutes: number;
@@ -1158,7 +1361,7 @@ export async function getWorkspaceDirectoryData(viewer: {
         name: user.name,
         role: user.role,
         designation: user.designation,
-        avatarUrl: user.avatarUrl,
+        avatar_url: user.avatarUrl,
         departmentId: user.departmentId ?? "no-department",
         departmentName: user.department?.name ?? "No department",
         taskCount: todaysPlans.length,
@@ -1238,7 +1441,7 @@ export async function getAttendanceData(user: {
       name: member.name,
       email: member.email,
       role: member.role,
-      avatarUrl: member.avatarUrl,
+      avatar_url: member.avatarUrl,
       departmentName: member.department?.name ?? "No department",
       attendance: record
         ? {

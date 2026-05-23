@@ -6,6 +6,7 @@ $stagingRoot = Join-Path $repoRoot "build-package-temp"
 $stagingPath = Join-Path $stagingRoot "portable-source-upload"
 
 $rootFiles = @(
+  "DEPLOY-CYBERPANEL.md",
   ".env.example",
   "README.md",
   "eslint.config.mjs",
@@ -103,7 +104,10 @@ try {
     foreach ($file in $files) {
       $relativePath = Get-RepoRelativePath -RootPath $repoRoot -TargetPath $file.FullName
 
-      if ($relativePath.StartsWith("public\uploads\", [System.StringComparison]::OrdinalIgnoreCase)) {
+      if (
+        $relativePath.StartsWith("public\uploads\", [System.StringComparison]::OrdinalIgnoreCase) -and
+        -not $relativePath.EndsWith(".gitkeep", [System.StringComparison]::OrdinalIgnoreCase)
+      ) {
         continue
       }
 

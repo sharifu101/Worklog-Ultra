@@ -26,11 +26,13 @@ export function RecurringTasksCenter({
   departments = [],
   userDepartmentId,
   allowOtherDepartment,
+  onSaved,
 }: {
   currentUserId: string;
   departments: Department[];
   userDepartmentId?: string | null;
   allowOtherDepartment?: boolean;
+  onSaved?: () => void;
 }) {
   const fallbackDepartmentId = userDepartmentId || (allowOtherDepartment ? OTHER_DEPARTMENT_ID : departments[0]?.id || "");
   const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
@@ -90,6 +92,7 @@ export function RecurringTasksCenter({
     setStartDate(new Date().toISOString().slice(0, 10));
     setEndDate("");
     toast.success("Recurring task saved.");
+    onSaved?.();
   }
 
   function handleDelete(templateId: string) {

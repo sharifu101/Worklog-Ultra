@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { extractContinuationMeta, stripContinuationMeta } from "@/lib/task-continuation";
 import { stripRecurringTaskMeta } from "@/lib/recurring-task-templates";
 import { formatDateTimeInDhaka, formatMinutes } from "@/lib/utils";
 
@@ -31,7 +32,7 @@ type MonitorUser = {
   name: string;
   role: string;
   designation: string | null;
-  avatarUrl: string | null;
+  avatar_url: string | null;
   departmentId: string;
   departmentName: string;
   taskCount: number;
@@ -82,6 +83,31 @@ function roleLabel(role: string) {
   if (role === "admin") return "CEO/Admin";
   if (role === "hr") return "HR";
   return "Employee";
+}
+
+function getTaskBody(description: string | null) {
+  return stripRecurringTaskMeta(stripContinuationMeta(description)).trim();
+}
+
+function getContinuationSummary(description: string | null) {
+  const continuationMeta = extractContinuationMeta(description);
+
+  if (!continuationMeta) {
+    return null;
+  }
+
+  const totalTrackedMinutes = continuationMeta.dailyLogs.reduce((sum, entry) => sum + entry.trackedMinutes, 0);
+  const lastWorked = continuationMeta.dailyLogs.length
+    ? continuationMeta.dailyLogs[continuationMeta.dailyLogs.length - 1]?.date
+    : continuationMeta.sourceDate;
+
+  return {
+    sourceDate: continuationMeta.sourceDate,
+    totalDays: Math.max(continuationMeta.daysActive || 0, continuationMeta.dailyLogs.length, 1),
+    totalTrackedMinutes,
+    lastWorked,
+    dailyLogs: continuationMeta.dailyLogs,
+  };
 }
 
 export function DirectoryCenter({
@@ -201,7 +227,7 @@ export function DirectoryCenter({
                 <div className="p-5">
                 <div className="flex items-start gap-4">
                   <Avatar className="h-14 w-14">
-                    {user.avatarUrl ? <AvatarImage alt={user.name} src={user.avatarUrl} /> : null}
+                    {user.avatar_url ? <AvatarImage alt={user.name} src={user.avatar_url} /> : null}
                     <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">
@@ -253,10 +279,47 @@ export function DirectoryCenter({
                               </td>
                               <td className="px-4 py-4">
                                 <p className="min-w-[220px] text-sm font-semibold text-[var(--foreground)]">{task.title}</p>
-                                {task.description ? (
+                                {getTaskBody(task.description) ? (
                                   <p className="mt-1 max-w-[320px] text-sm leading-6 text-[var(--muted-foreground)]">
-                                    {stripRecurringTaskMeta(task.description)}
+                                    {getTaskBody(task.description)}
                                   </p>
+                                ) : null}
+                                {getContinuationSummary(task.description) ? (
+                                  <div className="mt-3 rounded-2xl border border-violet-200 bg-violet-50 px-3 py-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <Badge variant="purple">Continued</Badge>
+                                      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-700">
+                                        {getContinuationSummary(task.description)?.totalDays} days
+                                      </span>
+                                      <span className="text-xs text-slate-600">
+                                        Overall {formatMinutes(getContinuationSummary(task.description)?.totalTrackedMinutes ?? 0)}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 grid gap-2 text-xs text-slate-700 md:grid-cols-3">
+                                      <div className="rounded-xl bg-white/80 px-2.5 py-2">
+                                        <p className="font-semibold uppercase tracking-[0.12em] text-violet-700">Started From</p>
+                                        <p className="mt-1">{getContinuationSummary(task.description)?.sourceDate}</p>
+                                      </div>
+                                      <div className="rounded-xl bg-white/80 px-2.5 py-2">
+                                        <p className="font-semibold uppercase tracking-[0.12em] text-violet-700">Last Worked</p>
+                                        <p className="mt-1">{getContinuationSummary(task.description)?.lastWorked ?? "Not set"}</p>
+                                      </div>
+                                      <div className="rounded-xl bg-white/80 px-2.5 py-2">
+                                        <p className="font-semibold uppercase tracking-[0.12em] text-violet-700">Progress History</p>
+                                        <p className="mt-1">Open the date-wise log below</p>
+                                      </div>
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      {(getContinuationSummary(task.description)?.dailyLogs ?? []).map((entry) => (
+                                        <span
+                                          className="rounded-full border border-violet-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700"
+                                          key={`${task.id}:${entry.date}`}
+                                        >
+                                          {entry.date} • {entry.progress}% • {formatMinutes(entry.trackedMinutes)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
                                 ) : null}
                               </td>
                               <td className="px-4 py-4">

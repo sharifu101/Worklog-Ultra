@@ -12,7 +12,7 @@ type PerformanceMember = {
   role: string;
   departmentId: string;
   departmentName: string;
-  avatarUrl: string | null;
+  avatar_url: string | null;
   score: number;
   completionRate: number;
   trackedMinutes: number;
@@ -137,7 +137,7 @@ export function DashboardPerformanceSpotlight({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12">
-              {selectedMember.avatarUrl ? <AvatarImage alt={selectedMember.name} src={selectedMember.avatarUrl} /> : null}
+              {selectedMember.avatar_url ? <AvatarImage alt={selectedMember.name} src={selectedMember.avatar_url} /> : null}
               <AvatarFallback>{getInitials(selectedMember.name)}</AvatarFallback>
             </Avatar>
             <div>

@@ -14,7 +14,7 @@ export default async function ReportPage({
   const user = await requireEmployee();
   const { date, taskId } = await searchParams;
   const selectedDate = date ? new Date(date) : new Date();
-  const tasks = await getPlanWithReports(user.id, selectedDate, { includeAssigned: Boolean(taskId) });
+  const tasks = await getPlanWithReports(user.id, selectedDate, { includeAssigned: true });
   const visibleTasks = taskId ? tasks.filter((task: (typeof tasks)[number]) => task.id === taskId) : tasks;
   const effectiveReportDate =
     taskId && visibleTasks[0]

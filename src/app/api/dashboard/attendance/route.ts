@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
 import { UserRole } from "@prisma/client";
 import { apiError, apiSuccess } from "@/lib/api";
+import { embedAttendanceOvertimeMeta } from "@/lib/attendance-overtime";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { attendanceUpdateSchema } from "@/lib/validators/worklog";
-import { calculateMinutesBetween, toDateOnly } from "@/lib/utils";
+import { calculateMinutesBetween, getDhakaCutoffIso, toDateOnly } from "@/lib/utils";
 
 export async function POST(request: NextRequest) {
   const user = await requireUser();
@@ -53,14 +54,43 @@ export async function POST(request: NextRequest) {
       })
     : null;
 
-  const finalCheckInAt =
-    existingRecord?.checkInAt && checkInAt
-      ? existingRecord.checkInAt.getTime() <= checkInAt.getTime()
-        ? existingRecord.checkInAt
-        : checkInAt
-      : existingRecord?.checkInAt ?? checkInAt;
-  const finalCheckOutAt = checkOutAt ?? null;
-  const workingMinutes = Math.max(0, calculateMinutesBetween(finalCheckInAt, finalCheckOutAt) - parsed.data.breakMinutes);
+  const finalCheckInAt = checkInAt ?? existingRecord?.checkInAt ?? null;
+  const finalActualCheckOutAt = checkOutAt ?? existingRecord?.checkOutAt ?? null;
+
+  if (finalCheckInAt && finalActualCheckOutAt && finalActualCheckOutAt.getTime() < finalCheckInAt.getTime()) {
+    return apiError("Check Out time cannot be earlier than Check In time.");
+  }
+
+  const cutoffAt = new Date(getDhakaCutoffIso(targetDate, 19, 30));
+  const now = new Date();
+  const autoClosedAt =
+    finalCheckInAt && !finalActualCheckOutAt && toDateOnly(now) === targetDate && now.getTime() >= cutoffAt.getTime()
+      ? cutoffAt
+      : null;
+  const actualCheckOutForOvertime = finalActualCheckOutAt ?? autoClosedAt;
+  const effectiveCheckOutAt =
+    actualCheckOutForOvertime && actualCheckOutForOvertime.getTime() > cutoffAt.getTime()
+      ? cutoffAt
+      : actualCheckOutForOvertime;
+  const workingMinutes = Math.max(0, calculateMinutesBetween(finalCheckInAt, effectiveCheckOutAt) - parsed.data.breakMinutes);
+  const overtimeMinutes =
+    finalCheckInAt && finalActualCheckOutAt && finalActualCheckOutAt.getTime() > cutoffAt.getTime()
+      ? Math.max(
+          0,
+          calculateMinutesBetween(
+            finalCheckInAt.getTime() > cutoffAt.getTime() ? finalCheckInAt : cutoffAt,
+            finalActualCheckOutAt,
+          ),
+        )
+      : 0;
+  const finalNote = embedAttendanceOvertimeMeta(parsed.data.note || "", {
+    overtimeMinutes,
+    actualCheckOutAt:
+      finalActualCheckOutAt && finalActualCheckOutAt.getTime() > cutoffAt.getTime()
+        ? finalActualCheckOutAt.toISOString()
+        : null,
+    autoClosedAt: autoClosedAt?.toISOString() ?? null,
+  });
 
   const record = await attendanceModel.upsert({
     where: {
@@ -71,9 +101,9 @@ export async function POST(request: NextRequest) {
     },
     update: {
       status: parsed.data.status,
-      note: parsed.data.note || null,
+      note: finalNote || null,
       checkInAt: finalCheckInAt,
-      checkOutAt: finalCheckOutAt,
+      checkOutAt: effectiveCheckOutAt,
       breakMinutes: parsed.data.breakMinutes,
       workingMinutes,
     },
@@ -81,9 +111,9 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       attendanceDate: new Date(targetDate),
       status: parsed.data.status,
-      note: parsed.data.note || null,
+      note: finalNote || null,
       checkInAt: finalCheckInAt,
-      checkOutAt: finalCheckOutAt,
+      checkOutAt: effectiveCheckOutAt,
       breakMinutes: parsed.data.breakMinutes,
       workingMinutes,
     },

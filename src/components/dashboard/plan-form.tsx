@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { ChevronDown, ChevronUp, Pause, Play, RotateCcw, Sparkles, Square, Trash2, WandSparkles, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Sparkles, Trash2, WandSparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -11,17 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  describeRecurringTemplate,
-  embedRecurringTaskDescription,
-  isRecurringTemplateActiveNow,
-  isRecurringTemplateDueToday,
-  OTHER_DEPARTMENT_ID,
-  readRecurringTemplates,
-  RecurringTemplate,
-} from "@/lib/recurring-task-templates";
-import { readTaskTimerSnapshot, writeTaskTimerSnapshot } from "@/lib/task-timer-storage";
-import { toDateOnly, toDateTimeInputValue } from "@/lib/utils";
+import { OTHER_DEPARTMENT_ID } from "@/lib/recurring-task-templates";
+import { CONTINUATION_MARKER, stripContinuationMeta } from "@/lib/task-continuation";
+import { toDateOnly } from "@/lib/utils";
 
 type Department = { id: string; name: string };
 type AssignableUser = {
@@ -38,17 +29,18 @@ type Suggestion = {
   priority: "low" | "normal" | "high" | "critical";
   source: string;
 };
-type Task = { id?: string; clientId: string; taskTitle: string; taskDescription: string; priority: string; departmentId: string; assigneeId: string };
-type TaskTimerState = {
-  elapsedSeconds: number;
-  runningSince: number | null;
-  actualStart: string;
-  actualEnd: string;
+type Task = {
+  id?: string;
+  clientId: string;
+  taskTitle: string;
+  taskDescription: string;
+  priority: string;
+  departmentId: string;
+  assigneeId: string;
 };
 
 type DraftSnapshot = {
   tasks: Task[];
-  timers: Record<string, TaskTimerState>;
 };
 
 function normalizeTaskTitle(value: string) {
@@ -66,34 +58,25 @@ function makeTask(defaultDepartmentId: string, defaultAssigneeId: string) {
   };
 }
 
-function formatElapsedDuration(totalSeconds: number) {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  return `${hours}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+function makeBlankTaskLike(task: Task, fallbackDepartmentId: string, fallbackAssigneeId: string) {
+  return makeTask(task.departmentId || fallbackDepartmentId, task.assigneeId || fallbackAssigneeId);
 }
 
-function getTimerKey(task: Task) {
-  return task.id ?? task.clientId;
+function stripAutoDescriptionText(description?: string | null) {
+  return stripContinuationMeta(description)
+    .replace(/^Predicted from your work pattern and completion history\.?\s*/i, "")
+    .trim();
 }
 
-function mirrorSharedPlanTimer(task: Task, timer: TaskTimerState) {
-  if (!task.id) {
-    return;
+function mergeDescriptionWithContinuationMeta(originalDescription: string, nextDescription: string) {
+  const markerIndex = originalDescription.indexOf(CONTINUATION_MARKER);
+
+  if (markerIndex === -1) {
+    return nextDescription;
   }
 
-  const liveTrackedSeconds =
-    timer.elapsedSeconds +
-    (timer.runningSince ? Math.max(0, Math.floor((Date.now() - timer.runningSince) / 1000)) : 0);
-
-  writeTaskTimerSnapshot(toDateOnly(), task.id, {
-    status: timer.actualEnd ? "done" : timer.actualStart ? "in_progress" : "pending",
-    trackedMinutes: String(Math.floor(liveTrackedSeconds / 60)),
-    actualStart: timer.actualStart,
-    actualEnd: timer.actualEnd,
-    runningStartedAt: timer.runningSince ? new Date(timer.runningSince).toISOString() : "",
-  });
+  const continuationMeta = originalDescription.slice(markerIndex).trim();
+  return [nextDescription.trim(), continuationMeta].filter(Boolean).join("\n\n").trim();
 }
 
 export function PlanForm({
@@ -120,91 +103,33 @@ export function PlanForm({
   const router = useRouter();
   const fallbackDepartmentId = userDepartmentId || departments[0]?.id || "";
   const fallbackAssigneeId = currentUserId;
-  const validInitialTaskIds = new Set((initialTasks ?? []).map((task) => task.id).filter(Boolean));
+  const validInitialTaskIds = useMemo(
+    () => new Set((initialTasks ?? []).map((task) => task.id).filter(Boolean)),
+    [initialTasks],
+  );
   const planDraftStorageKey = useMemo(() => `worklog-plan-draft:${currentUserId}:${toDateOnly()}`, [currentUserId]);
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    if (typeof window !== "undefined") {
-      const raw = window.localStorage.getItem(`worklog-plan-draft:${currentUserId}:${toDateOnly()}`);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as DraftSnapshot;
-          const validDraftTasks = (parsed.tasks ?? []).filter((task) => !task.id || validInitialTaskIds.has(task.id));
-
-          if (validDraftTasks.length) {
-            return validDraftTasks;
-          }
-        } catch {
-          window.localStorage.removeItem(`worklog-plan-draft:${currentUserId}:${toDateOnly()}`);
-        }
-      }
-    }
-
-    return (initialTasks ?? []).length
-      ? (initialTasks ?? []).map((task) => ({
-          clientId: crypto.randomUUID(),
-          ...task,
-        }))
-      : [makeTask(fallbackDepartmentId, fallbackAssigneeId)];
-  });
+  const serverTasks = useMemo(
+    () =>
+      (initialTasks ?? []).length
+        ? (initialTasks ?? []).map((task) => ({
+            clientId: crypto.randomUUID(),
+            ...task,
+          }))
+        : [makeTask(fallbackDepartmentId, fallbackAssigneeId)],
+    [fallbackAssigneeId, fallbackDepartmentId, initialTasks],
+  );
+  const [tasks, setTasks] = useState<Task[]>(() => serverTasks);
   const [loading, setLoading] = useState(false);
   const [lastSuggestedTitle, setLastSuggestedTitle] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [recurringSuggestions, setRecurringSuggestions] = useState<RecurringTemplate[]>([]);
-  const [now, setNow] = useState(() => Date.now());
-  const [startingTaskKey, setStartingTaskKey] = useState<string | null>(null);
-  const [timers, setTimers] = useState<Record<string, TaskTimerState>>(() => {
-    if (typeof window === "undefined") {
-      return {};
-    }
-
-    const raw = window.localStorage.getItem(planDraftStorageKey);
-    if (!raw) {
-      return {};
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as DraftSnapshot;
-      const validKeys = new Set(
-        (parsed.tasks ?? [])
-          .filter((task) => !task.id || validInitialTaskIds.has(task.id))
-          .map((task) => getTimerKey(task)),
-      );
-
-      return Object.fromEntries(
-        Object.entries(parsed.timers ?? {}).filter(([timerKey]) => validKeys.has(timerKey)),
-      );
-    } catch {
-      return {};
-    }
-  });
 
   const activeDepartmentId = useMemo(
     () => tasks[0]?.departmentId || fallbackDepartmentId,
     [fallbackDepartmentId, tasks],
   );
-  const activeDepartmentName = departments.find((department) => department.id === activeDepartmentId)?.name ?? "your department";
+  const activeDepartmentName =
+    departments.find((department) => department.id === activeDepartmentId)?.name ?? "your department";
   const allowOtherDepartment = role === "admin";
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const allTemplates = readRecurringTemplates().filter((template) => isRecurringTemplateActiveNow(template));
-    const sorted = [...allTemplates].sort((left, right) => {
-      const leftDue = isRecurringTemplateDueToday(left) ? 1 : 0;
-      const rightDue = isRecurringTemplateDueToday(right) ? 1 : 0;
-
-      if (leftDue !== rightDue) {
-        return rightDue - leftDue;
-      }
-
-      return left.taskTitle.localeCompare(right.taskTitle);
-    });
-
-    setRecurringSuggestions(sorted);
-  }, []);
 
   useEffect(() => {
     if (!clearDraftOnMount || typeof window === "undefined") {
@@ -213,36 +138,32 @@ export function PlanForm({
 
     window.localStorage.removeItem(planDraftStorageKey);
     setTasks([makeTask(fallbackDepartmentId, fallbackAssigneeId)]);
-    setTimers({});
   }, [clearDraftOnMount, fallbackAssigneeId, fallbackDepartmentId, planDraftStorageKey]);
 
   useEffect(() => {
-    setTimers((current) => {
-      const next = { ...current };
+    if (typeof window === "undefined" || clearDraftOnMount) {
+      return;
+    }
 
-      for (const task of tasks) {
-        const timerKey = getTimerKey(task);
+    const raw = window.localStorage.getItem(planDraftStorageKey);
+    if (!raw) {
+      return;
+    }
 
-        if (!task.id || next[timerKey]) {
-          continue;
-        }
+    try {
+      const parsed = JSON.parse(raw) as DraftSnapshot;
+      const validDraftTasks = (parsed.tasks ?? []).filter((task) => !task.id || validInitialTaskIds.has(task.id));
 
-        const sharedTimer = readTaskTimerSnapshot(toDateOnly(), task.id);
-        if (!sharedTimer) {
-          continue;
-        }
-
-        next[timerKey] = {
-          elapsedSeconds: Number(sharedTimer.trackedMinutes || 0) * 60,
-          runningSince: sharedTimer.runningStartedAt ? new Date(sharedTimer.runningStartedAt).getTime() : null,
-          actualStart: sharedTimer.actualStart,
-          actualEnd: sharedTimer.actualEnd,
-        };
+      if (!validDraftTasks.length) {
+        return;
       }
 
-      return next;
-    });
-  }, [tasks]);
+      setTasks(validDraftTasks);
+    } catch {
+      window.localStorage.removeItem(planDraftStorageKey);
+      setTasks(serverTasks);
+    }
+  }, [clearDraftOnMount, planDraftStorageKey, serverTasks, validInitialTaskIds]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -253,10 +174,9 @@ export function PlanForm({
       planDraftStorageKey,
       JSON.stringify({
         tasks,
-        timers,
       } satisfies DraftSnapshot),
     );
-  }, [planDraftStorageKey, tasks, timers]);
+  }, [planDraftStorageKey, tasks]);
 
   function updateTask(index: number, key: keyof Task, value: string) {
     setTasks((current) =>
@@ -266,31 +186,28 @@ export function PlanForm({
 
   function firstBlankTaskIndex(source: Task[]) {
     return source.findIndex(
-      (task) =>
-        !task.taskTitle.trim() &&
-        !task.taskDescription.trim() &&
-        task.priority === "normal",
+      (task) => !task.taskTitle.trim() && !task.taskDescription.trim() && task.priority === "normal",
     );
   }
 
   function addBlankTask() {
     setTasks((current) => [
+      makeTask(current[0]?.departmentId || fallbackDepartmentId, current[0]?.assigneeId || fallbackAssigneeId),
       ...current,
-      makeTask(current[current.length - 1]?.departmentId || fallbackDepartmentId, current[current.length - 1]?.assigneeId || fallbackAssigneeId),
     ]);
   }
 
   function removeTask(index: number) {
     setTasks((current) => current.filter((_, taskIndex) => taskIndex !== index));
-    setTimers((current) => {
-      const task = tasks[index];
-      if (!task) {
-        return current;
-      }
+  }
 
-      const next = { ...current };
-      delete next[getTimerKey(task)];
-      return next;
+  function removeTaskFromDraft(task: Task) {
+    setTasks((current) => {
+      const filtered = current.filter(
+        (item) => item.clientId !== task.clientId && (!task.id || item.id !== task.id),
+      );
+
+      return filtered.length ? filtered : [makeBlankTaskLike(task, fallbackDepartmentId, fallbackAssigneeId)];
     });
   }
 
@@ -319,247 +236,19 @@ export function PlanForm({
       }
 
       return [
-        ...current,
         {
           clientId: crypto.randomUUID(),
           taskTitle: suggestion.title,
           taskDescription: suggestion.description,
           priority: suggestion.priority,
-          departmentId: current[current.length - 1]?.departmentId || fallbackDepartmentId,
-          assigneeId: current[current.length - 1]?.assigneeId || fallbackAssigneeId,
+          departmentId: current[0]?.departmentId || fallbackDepartmentId,
+          assigneeId: current[0]?.assigneeId || fallbackAssigneeId,
         },
+        ...current,
       ];
     });
     setLastSuggestedTitle(suggestion.title);
-    toast.success(`Task loaded: ${suggestion.title}`);
-  }
-
-  function addRecurringTask(template: RecurringTemplate) {
-    const normalizedTemplateTitle = normalizeTaskTitle(template.taskTitle);
-
-    if (tasks.some((task) => normalizeTaskTitle(task.taskTitle) === normalizedTemplateTitle)) {
-      toast.error("This recurring task is already in today's plan.");
-      return;
-    }
-
-    setTasks((current) => {
-      const blankIndex = firstBlankTaskIndex(current);
-      const nextTask = {
-        clientId: crypto.randomUUID(),
-        taskTitle: template.taskTitle,
-        taskDescription: embedRecurringTaskDescription(template.taskDescription),
-        priority: template.priority,
-        departmentId: template.departmentId === OTHER_DEPARTMENT_ID ? fallbackDepartmentId : template.departmentId || fallbackDepartmentId,
-        assigneeId: fallbackAssigneeId,
-      };
-
-      if (blankIndex !== -1) {
-        return current.map((task, index) => (index === blankIndex ? { ...task, ...nextTask } : task));
-      }
-
-      return [...current, nextTask];
-    });
-    toast.success(`Task loaded: ${template.taskTitle}`);
-  }
-
-  function currentTrackedSeconds(task: Task) {
-    const timer = timers[getTimerKey(task)];
-    if (!timer) {
-      return 0;
-    }
-
-    if (!timer.runningSince) {
-      return timer.elapsedSeconds;
-    }
-
-    return timer.elapsedSeconds + Math.max(0, Math.floor((now - timer.runningSince) / 1000));
-  }
-
-  async function ensureTaskSaved(task: Task) {
-    if (task.id) {
-      return task;
-    }
-
-    const response = await fetch("/api/dashboard/plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        planDate: new Date().toISOString(),
-        tasks: [
-          {
-            taskTitle: task.taskTitle,
-            taskDescription: task.taskDescription,
-            priority: task.priority,
-            departmentId: task.departmentId,
-            assigneeId: task.assigneeId,
-          },
-        ],
-      }),
-    });
-
-    const result = await response.json();
-    if (!response.ok) {
-      throw new Error(result.message ?? "Task could not be saved.");
-    }
-
-    const createdTask = Array.isArray(result.tasks) ? result.tasks[0] : null;
-    if (!createdTask?.id) {
-      throw new Error("Task save response was incomplete.");
-    }
-
-    const savedTask = {
-      ...task,
-      id: createdTask.id,
-      departmentId: createdTask.departmentId ?? task.departmentId,
-    };
-
-    setTasks((current) =>
-      current.map((item) => (item.clientId === task.clientId ? savedTask : item)),
-    );
-
-    setTimers((current) => {
-      const previous = current[task.clientId];
-      if (!previous) {
-        return current;
-      }
-
-      const next = { ...current };
-      next[createdTask.id] = previous;
-      delete next[task.clientId];
-      return next;
-    });
-
-    return savedTask;
-  }
-
-  async function startTimer(task: Task) {
-    if (!task.taskTitle.trim()) {
-      toast.error("Write the task title first, then start the timer.");
-      return;
-    }
-
-    const taskKey = getTimerKey(task);
-    setStartingTaskKey(taskKey);
-
-    try {
-      const targetTask = await ensureTaskSaved(task);
-      const timerKey = getTimerKey(targetTask);
-      const currentTimer = timers[getTimerKey(task)] ?? timers[timerKey];
-      const actualStart = currentTimer?.actualStart || toDateTimeInputValue(new Date());
-
-      setTimers((current) => {
-        const previous = current[timerKey] ?? current[getTimerKey(task)];
-        const nextTimer = {
-          elapsedSeconds: previous?.elapsedSeconds ?? 0,
-          runningSince: Date.now(),
-          actualStart,
-          actualEnd: "",
-        };
-
-        mirrorSharedPlanTimer(targetTask, nextTimer);
-
-        return {
-          ...current,
-          [timerKey]: nextTimer,
-        };
-      });
-
-      await fetch("/api/dashboard/report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reportDate: toDateOnly(),
-          updates: [
-            {
-              dailyTaskId: targetTask.id,
-              status: "in_progress",
-              note: "",
-              completionPercent: 0,
-              trackedMinutes: 0,
-              actualStart,
-              actualEnd: "",
-              difficultyLevel: "",
-            },
-          ],
-        }),
-      });
-
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Task could not be started.");
-    } finally {
-      setStartingTaskKey(null);
-    }
-  }
-
-  function pauseTimer(task: Task) {
-    const timerKey = getTimerKey(task);
-
-    setTimers((current) => {
-      const timer = current[timerKey];
-      if (!timer?.runningSince) {
-        return current;
-      }
-
-      const nextTimer = {
-        elapsedSeconds: timer.elapsedSeconds + Math.max(0, Math.floor((Date.now() - timer.runningSince) / 1000)),
-        runningSince: null,
-        actualStart: timer.actualStart,
-        actualEnd: timer.actualEnd,
-      };
-
-      mirrorSharedPlanTimer(task, nextTimer);
-
-      return {
-        ...current,
-        [timerKey]: nextTimer,
-      };
-    });
-  }
-
-  function stopTimer(task: Task) {
-    const timerKey = getTimerKey(task);
-
-    setTimers((current) => {
-      const timer = current[timerKey];
-      const elapsedSeconds =
-        (timer?.elapsedSeconds ?? 0) +
-        (timer?.runningSince ? Math.max(0, Math.floor((Date.now() - timer.runningSince) / 1000)) : 0);
-
-      const nextTimer = {
-        elapsedSeconds,
-        runningSince: null,
-        actualStart: timer?.actualStart || toDateTimeInputValue(new Date()),
-        actualEnd: toDateTimeInputValue(new Date()),
-      };
-
-      mirrorSharedPlanTimer(task, nextTimer);
-
-      return {
-        ...current,
-        [timerKey]: nextTimer,
-      };
-    });
-  }
-
-  function resetTimer(task: Task) {
-    const timerKey = getTimerKey(task);
-
-    setTimers((current) => {
-      const nextTimer = {
-        elapsedSeconds: 0,
-        runningSince: null,
-        actualStart: "",
-        actualEnd: "",
-      };
-
-      mirrorSharedPlanTimer(task, nextTimer);
-
-      return {
-        ...current,
-        [timerKey]: nextTimer,
-      };
-    });
+    toast.success(`Suggestion loaded for edit: ${suggestion.title}`);
   }
 
   async function save() {
@@ -569,23 +258,21 @@ export function PlanForm({
       return;
     }
 
+    const tasksToCreate = tasks.filter((task) => !task.id);
+
+    if (!tasksToCreate.length) {
+      toast.success("These tasks are already in today's plan.");
+      return;
+    }
+
     setLoading(true);
-    const taskSnapshot = tasks.map((task) => ({
-      ...task,
-      timer: timers[getTimerKey(task)] ?? {
-        elapsedSeconds: 0,
-        runningSince: null,
-        actualStart: "",
-        actualEnd: "",
-      },
-    }));
 
     const response = await fetch("/api/dashboard/plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         planDate: new Date().toISOString(),
-        tasks: tasks.map((task) => ({
+        tasks: tasksToCreate.map((task) => ({
           taskTitle: task.taskTitle,
           taskDescription: task.taskDescription,
           priority: task.priority,
@@ -603,85 +290,8 @@ export function PlanForm({
     }
 
     toast.success(result.message);
-    const createdTasks = Array.isArray(result.tasks) ? result.tasks : [];
-
-    if (createdTasks.length) {
-      const reportUpdates = createdTasks
-        .map((createdTask: { id: string }, index: number) => {
-          const source = taskSnapshot[index];
-          if (!source) {
-            return null;
-          }
-
-          const timer = source.timer;
-          const trackedSeconds =
-            timer.elapsedSeconds +
-            (timer.runningSince ? Math.max(0, Math.floor((Date.now() - timer.runningSince) / 1000)) : 0);
-          const trackedMinutes = Math.floor(trackedSeconds / 60);
-          const isRunning = Boolean(timer.runningSince);
-          const hasTimerData = trackedMinutes > 0 || Boolean(timer.actualStart);
-
-          writeTaskTimerSnapshot(toDateOnly(), createdTask.id, {
-            status: isRunning ? "in_progress" : "pending",
-            trackedMinutes: String(trackedMinutes),
-            actualStart: timer.actualStart,
-            actualEnd: timer.actualEnd,
-            runningStartedAt: timer.runningSince ? new Date(timer.runningSince).toISOString() : "",
-          });
-
-          if (!hasTimerData) {
-            return null;
-          }
-
-          return {
-            dailyTaskId: createdTask.id,
-            status: isRunning ? "in_progress" : "pending",
-            note: "",
-            completionPercent: 0,
-            trackedMinutes,
-            actualStart: timer.actualStart,
-            actualEnd: timer.actualEnd,
-            difficultyLevel: "",
-          };
-        })
-        .filter(
-          (
-            item: {
-              dailyTaskId: string;
-              status: "done" | "in_progress" | "pending";
-              note: string;
-              completionPercent: number;
-              trackedMinutes: number;
-              actualStart: string;
-              actualEnd: string;
-              difficultyLevel: string;
-            } | null,
-          ): item is {
-            dailyTaskId: string;
-            status: "done" | "in_progress" | "pending";
-            note: string;
-            completionPercent: number;
-            trackedMinutes: number;
-            actualStart: string;
-            actualEnd: string;
-            difficultyLevel: string;
-          } => Boolean(item),
-        );
-
-      if (reportUpdates.length) {
-        await fetch("/api/dashboard/report", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reportDate: toDateOnly(),
-            updates: reportUpdates,
-          }),
-        });
-      }
-    }
-
+    tasksToCreate.forEach((task) => removeTaskFromDraft(task));
     setTasks([makeTask(fallbackDepartmentId, fallbackAssigneeId)]);
-    setTimers({});
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(planDraftStorageKey);
     }
@@ -691,70 +301,6 @@ export function PlanForm({
 
   return (
     <div className="space-y-5">
-      <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <CardTitle>Today&apos;s Recurring Suggestions</CardTitle>
-              <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-                Tasks scheduled for today from your recurring setup. Click once to add them into today&apos;s plan.
-              </p>
-            </div>
-            <Link className="text-sm font-semibold text-[#4f5ef7] hover:text-[#3f4ede]" href="/dashboard/recurring">
-              Manage Recurring
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {recurringSuggestions.length ? (
-            <div className="grid gap-3 xl:grid-cols-2">
-              {(recurringSuggestions ?? []).map((template, index) => (
-                <button
-                  key={template.id}
-                  className="w-full cursor-pointer rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 text-left transition-all hover:-translate-y-0.5 hover:border-[#4f5ef7]/45 hover:bg-[var(--panel)] hover:shadow-[0_14px_28px_rgba(79,94,247,0.12)]"
-                  onClick={() => addRecurringTask(template)}
-                  type="button"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[var(--foreground)]">
-                        {index + 1}. {template.taskTitle}
-                      </p>
-                      <p className="mt-1 text-sm text-[var(--muted-foreground)]">{template.taskDescription || "No extra description saved."}</p>
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
-                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">{template.priority}</span>
-                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">
-                          {template.departmentId === OTHER_DEPARTMENT_ID
-                            ? "Other"
-                            : departments.find((department) => department.id === template.departmentId)?.name ?? activeDepartmentName}
-                        </span>
-                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">{describeRecurringTemplate(template)}</span>
-                        <span
-                          className={`rounded-full px-2.5 py-1 ${
-                            isRecurringTemplateDueToday(template)
-                              ? "bg-blue-50 text-blue-700"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {isRecurringTemplateDueToday(template) ? "Today" : "Upcoming"}
-                        </span>
-                      </div>
-                    </div>
-                    <Button className="button-force-white pointer-events-none shrink-0 bg-[#4f5ef7] hover:bg-[#4453eb]" type="button">
-                      Add
-                    </Button>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-[var(--panel-border)] bg-[var(--panel-muted)] p-5 text-sm text-[var(--muted-foreground)]">
-              No recurring task is scheduled to show today. You can set daily, weekly, or monthly recurrence from the recurring page.
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -815,11 +361,11 @@ export function PlanForm({
                         </span>
                         {lastSuggestedTitle === suggestion.title ? (
                           <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 font-medium text-emerald-300">
-                            Added below
+                            Loaded for edit
                           </span>
                         ) : (
                           <span className="rounded-full bg-[var(--panel)] px-2.5 py-1 font-medium text-[var(--muted-foreground)]">
-                            Click to add
+                            Load to edit
                           </span>
                         )}
                       </div>
@@ -839,49 +385,50 @@ export function PlanForm({
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-            <div>
-              <CardTitle>Morning Work Plan</CardTitle>
-              <p className="text-sm text-[var(--muted-foreground)]">
-              Start with one task here. Add more only when you need multiple tasks.
+          <div>
+            <CardTitle>Morning Work Plan</CardTitle>
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Add your tasks here first. After saving, start time from the dashboard.
             </p>
           </div>
-          <Button className="button-force-white bg-[#4f5ef7] hover:bg-[#4453eb]" onClick={addBlankTask} type="button" variant="default">
+          <Button
+            className="button-force-white bg-[#4f5ef7] hover:bg-[#4453eb]"
+            onClick={addBlankTask}
+            type="button"
+            variant="default"
+          >
             New Task
           </Button>
         </CardHeader>
-          <CardContent className="space-y-4">
-            {(tasks ?? []).map((task, index) => (
+        <CardContent className="space-y-4">
+          {(tasks ?? []).map((task, index) => (
             <div key={task.clientId} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-              {(() => {
-                const hasTaskTitle = task.taskTitle.trim().length > 0;
-                const isStarting = startingTaskKey === getTimerKey(task);
-                return (
-                  <>
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--foreground)]">Task {index + 1}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">Fill this task, or add another one below if needed.</p>
-                  </div>
-                  {tasks.length > 1 ? (
-                    <Button
-                      className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                      onClick={() => removeTask(index)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Remove
-                    </Button>
-                  ) : null}
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--foreground)]">Task {index + 1}</p>
+                  <p className="text-xs text-[var(--muted-foreground)]">Fill this task, or add another one below if needed.</p>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label>Task Title</Label>
+                {tasks.length > 1 ? (
+                  <Button
+                    className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                    onClick={() => removeTask(index)}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove
+                  </Button>
+                ) : null}
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Task Title</Label>
                   <Input
+                    onChange={(event) => updateTask(index, "taskTitle", event.target.value)}
                     placeholder="Enter task title"
                     value={task.taskTitle}
-                    onChange={(event) => updateTask(index, "taskTitle", event.target.value)}
                   />
                 </div>
                 <div>
@@ -915,69 +462,25 @@ export function PlanForm({
                     </SelectContent>
                   </Select>
                 </div>
-                  <div className="flex flex-wrap items-end justify-end gap-2">
-                    {timers[getTimerKey(task)]?.runningSince ? (
-                      <Button
-                        className="button-force-white bg-amber-500 hover:bg-amber-600"
-                        disabled={!hasTaskTitle || isStarting}
-                        onClick={() => pauseTimer(task)}
-                        type="button"
-                        variant="default"
-                    >
-                      <Pause className="h-4 w-4" /> Pause
-                    </Button>
-                    ) : (
-                      <Button
-                        className="button-force-white bg-[#19a46b] hover:bg-[#15885a]"
-                        disabled={!hasTaskTitle || isStarting}
-                        onClick={() => startTimer(task)}
-                        type="button"
-                        variant="default"
-                    >
-                      <Play className="h-4 w-4" /> {isStarting ? "Starting..." : "Start"}
-                    </Button>
-                  )}
-                  <Button
-                    className="button-force-white bg-slate-500 hover:bg-slate-600"
-                    disabled={isStarting}
-                    onClick={() => resetTimer(task)}
-                    type="button"
-                    variant="default"
-                  >
-                    <RotateCcw className="h-4 w-4" /> Reset
-                  </Button>
-                  <Button
-                    className="button-force-white bg-slate-900 hover:bg-slate-800"
-                    disabled={!hasTaskTitle || isStarting}
-                      onClick={() => stopTimer(task)}
-                      type="button"
-                      variant="default"
-                    >
-                      <Square className="h-4 w-4" /> Stop
-                  </Button>
-                </div>
               </div>
-              <div className="mt-4 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] px-4 py-3 text-sm font-semibold text-[var(--foreground)]">
-                Time Tracked: <span className="ml-2 text-[#315fe6]">{formatElapsedDuration(currentTrackedSeconds(task))}</span>
-                  <span className="ml-4 text-[var(--muted-foreground)]">
-                  {timers[getTimerKey(task)]?.actualStart
-                    ? `Started ${new Date(timers[getTimerKey(task)].actualStart).toLocaleTimeString("en-BD", { hour: "numeric", minute: "2-digit" })}`
-                    : "Not started yet"}
-                  </span>
+
+              <div className="mt-4">
+                <Label>Description</Label>
+                <Textarea
+                  onChange={(event) =>
+                    updateTask(
+                      index,
+                      "taskDescription",
+                      mergeDescriptionWithContinuationMeta(task.taskDescription, event.target.value),
+                    )
+                  }
+                  placeholder="Add a short task description"
+                  value={stripAutoDescriptionText(task.taskDescription)}
+                />
               </div>
-                <div className="mt-4">
-                  <Label>Description</Label>
-                  <Textarea
-                    placeholder="Add a short task description"
-                    value={task.taskDescription}
-                    onChange={(event) => updateTask(index, "taskDescription", event.target.value)}
-                  />
-                </div>
-                  </>
-                );
-              })()}
-              </div>
-            ))}
+            </div>
+          ))}
+
           <Button className="button-force-white w-full" disabled={loading} onClick={save} type="button">
             {loading ? "Saving plan..." : "Add To Today's Plan"}
           </Button>

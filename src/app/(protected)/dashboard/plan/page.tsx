@@ -1,23 +1,17 @@
 import { PlanForm } from "@/components/dashboard/plan-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireEmployee } from "@/lib/auth/server";
-import { getAssignableUsers, getDepartments, getPlanSuggestions, getPlanWithReports } from "@/lib/worklog";
-import { toDateOnly } from "@/lib/utils";
+import { getAssignableUsers, getDepartments, getPlanSuggestions } from "@/lib/worklog";
 
 export const dynamic = "force-dynamic";
 
 export default async function PlanPage() {
   const user = await requireEmployee();
-  const [departments, tasks, suggestions, assignableUsers] = await Promise.all([
+  const [departments, suggestions, assignableUsers] = await Promise.all([
     getDepartments(),
-    getPlanWithReports(user.id, new Date(), { includeAssigned: false }),
     getPlanSuggestions(user.id, user.departmentId),
     getAssignableUsers(),
   ]);
-  const todayKey = toDateOnly();
-  const visibleTasks = tasks.filter(
-    (task) => !task.updates.some((update) => toDateOnly(update.reportDate) === todayKey && update.status === "done"),
-  );
 
   return (
     <div className="space-y-5">
@@ -35,14 +29,7 @@ export default async function PlanPage() {
         assignableUsers={assignableUsers ?? []}
         currentUserId={user.id}
         departments={departments ?? []}
-        initialTasks={(visibleTasks ?? []).map((task) => ({
-          assigneeId: task.userId,
-          id: task.id,
-          taskTitle: task.taskTitle,
-          taskDescription: task.taskDescription ?? "",
-          priority: task.priority,
-          departmentId: task.departmentId,
-        }))}
+        initialTasks={[]}
         suggestions={suggestions ?? []}
         userDepartmentId={user.departmentId}
         role={user.role}

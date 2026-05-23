@@ -4,6 +4,7 @@ import { CheckCircle2, Pause, Play, RotateCcw, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { AssignmentReviewControls } from "@/components/dashboard/assignment-review-controls";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,11 +12,22 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { readTaskTimerSnapshot, writeTaskTimerSnapshot } from "@/lib/task-timer-storage";
-import { toDateTimeInputValue } from "@/lib/utils";
+import { parseDhakaDateTime, toDateTimeInputValue } from "@/lib/utils";
 
 type ReportTask = {
   id: string;
   taskTitle: string;
+  assignedBy?: string | null;
+  latestReview?: {
+    id: string;
+    status: "pending" | "approved" | "rejected";
+    submitNote: string;
+    reviewNote: string | null;
+    createdAt: Date | string;
+    reviewedAt: Date | string | null;
+    requestedById: string;
+    reviewerId: string | null;
+  } | null;
   updates: Array<{
     status: "done" | "in_progress" | "pending";
     note: string | null;
@@ -148,10 +160,10 @@ function calculateManualTrackedMinutes(actualStart: string, actualEnd: string) {
     return null;
   }
 
-  const start = new Date(actualStart);
-  const end = new Date(actualEnd);
+  const start = parseDhakaDateTime(actualStart);
+  const end = parseDhakaDateTime(actualEnd);
 
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+  if (!start || !end || end <= start) {
     return null;
   }
 
@@ -637,6 +649,17 @@ export function ReportForm({
                 value={updates[index]?.note}
               />
             </div>
+
+            {task.assignedBy ? (
+              <div className="mt-4 flex justify-end">
+                <AssignmentReviewControls
+                  latestReview={task.latestReview ?? null}
+                  mode="assignee"
+                  taskId={task.id}
+                  taskTitle={task.taskTitle}
+                />
+              </div>
+            ) : null}
 
           </div>
         ))}

@@ -98,7 +98,7 @@ export function DashboardHeader({
     role: "employee" | "hr" | "manager" | "admin";
     roleTitle: string;
     designation: string | null;
-    avatarUrl?: string | null;
+    avatar_url?: string | null;
     unreadMessages: number;
     requestNotifications: number;
     assignmentNotifications: number;
@@ -457,7 +457,7 @@ export function DashboardHeader({
           name: user.name,
           role: user.role,
           designation: user.designation,
-          avatarUrl: user.avatarUrl,
+          avatar_url: user.avatar_url,
         }}
       />
       <div className="flex-1" />
@@ -488,7 +488,7 @@ export function DashboardHeader({
         >
           <MessageSquareMore className="h-5 w-5" />
           {visibleUnreadMessages > 0 ? (
-            <span className="absolute right-0 top-0 inline-flex min-w-5 items-center justify-center rounded-full bg-[#4f5ef7] px-1.5 text-[10px] font-semibold text-white">
+            <span className="absolute right-0 top-0 inline-flex min-w-5 items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-[10px] font-semibold text-white">
               {visibleUnreadMessages > 9 ? "9+" : visibleUnreadMessages}
             </span>
           ) : null}
@@ -631,7 +631,7 @@ export function DashboardHeader({
             type="button"
           >
             <Avatar>
-              {user.avatarUrl ? <AvatarImage alt={user.name} src={user.avatarUrl} /> : null}
+              {user.avatar_url ? <AvatarImage alt={user.name} src={user.avatar_url} /> : null}
               <AvatarFallback>{user.name.slice(0, 1)}</AvatarFallback>
             </Avatar>
             <div className="hidden text-left sm:block">

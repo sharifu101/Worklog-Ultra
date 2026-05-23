@@ -15,6 +15,7 @@ export async function POST() {
           email: context.user.email,
           name: context.user.name,
           role: context.user.role,
+          avatar_url: context.user.avatarUrl ?? null,
           department: context.user.department?.name ?? null,
         }
       : null,

@@ -146,7 +146,7 @@ export default async function AdminPage() {
               <div key={report.userId} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                 <div className="flex items-start gap-3">
                   <Avatar className="h-11 w-11">
-                    {report.avatarUrl ? <AvatarImage alt={report.name} src={report.avatarUrl} /> : null}
+                    {report.avatar_url ? <AvatarImage alt={report.name} src={report.avatar_url} /> : null}
                     <AvatarFallback>{report.name.slice(0, 1)}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">

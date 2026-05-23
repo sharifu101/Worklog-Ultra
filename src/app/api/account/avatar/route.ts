@@ -61,7 +61,10 @@ export async function POST(request: NextRequest) {
 
   return apiSuccess({
     message: "Profile photo uploaded successfully.",
-    avatarUrl,
-    user: updatedUser,
+    avatar_url: avatarUrl,
+    user: {
+      ...updatedUser,
+      avatar_url: updatedUser.avatarUrl,
+    },
   });
 }

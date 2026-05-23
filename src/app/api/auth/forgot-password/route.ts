@@ -34,11 +34,8 @@ export async function POST(request: NextRequest) {
   });
 
   const mailConfigured = isMailConfigured();
-  const showDebugCode =
-    process.env.NODE_ENV !== "production" &&
-    process.env.AUTH_SIGNUP_SHOW_OTP_ON_SCREEN === "true";
 
-  if (!mailConfigured && !showDebugCode) {
+  if (!mailConfigured) {
     return apiError("Password reset email is not configured yet.", 500);
   }
 
@@ -55,7 +52,6 @@ export async function POST(request: NextRequest) {
 
   return apiSuccess({
     message: "If the account exists, a 6 digit reset code has been sent.",
-    code: showDebugCode ? code : undefined,
     email: user.email,
   });
 }

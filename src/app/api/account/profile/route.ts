@@ -17,8 +17,8 @@ export async function POST(request: NextRequest) {
   const payload = parsed.data;
   const departmentId = payload.departmentId || null;
   const nextAvatarUrl =
-    typeof payload.avatarUrl === "string" && payload.avatarUrl.trim().startsWith("/uploads/avatars/")
-      ? payload.avatarUrl.trim()
+    typeof payload.avatar_url === "string" && payload.avatar_url.trim().startsWith("/uploads/avatars/")
+      ? payload.avatar_url.trim()
       : user.avatarUrl;
 
   if (roleNeedsDepartment(user.role) && !departmentId) {
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     message: "Profile updated successfully.",
     user: {
       name: updatedUser.name,
-      avatarUrl: updatedUser.avatarUrl,
+      avatar_url: updatedUser.avatarUrl,
       designation: updatedUser.designation,
       department: updatedUser.department?.name ?? null,
     },

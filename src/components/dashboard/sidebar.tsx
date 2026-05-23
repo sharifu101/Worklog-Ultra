@@ -27,7 +27,7 @@ type SidebarUser = {
   name: string;
   role: "employee" | "hr" | "manager" | "admin";
   designation: string | null;
-  avatarUrl?: string | null;
+  avatar_url?: string | null;
   extraAccess?: string[];
   assignmentNotifications?: number;
 };

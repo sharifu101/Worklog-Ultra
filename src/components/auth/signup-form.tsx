@@ -30,7 +30,7 @@ export function SignupForm({
 }) {
   const router = useRouter();
   const [role, setRole] = useState("employee");
-  const [otpStage, setOtpStage] = useState<{ email: string; role: string; otp?: string } | null>(null);
+  const [otpStage, setOtpStage] = useState<{ email: string; role: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showAccessCode, setShowAccessCode] = useState(false);
@@ -57,7 +57,7 @@ export function SignupForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const result = await parseApiResponse<{ message: string; otp?: string }>(response, "Registration request failed.");
+    const result = await parseApiResponse<{ message: string }>(response, "Registration request failed.");
     setLoading(false);
 
     if (!response.ok) {
@@ -66,7 +66,7 @@ export function SignupForm({
     }
 
     toast.success(result.message);
-    setOtpStage({ email: payload.email, role, otp: result.otp });
+    setOtpStage({ email: payload.email, role });
   }
 
   async function verify(formData: FormData) {

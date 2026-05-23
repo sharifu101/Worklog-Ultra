@@ -2,9 +2,9 @@
 
 import { PlayCircle, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { toDateOnly, toDhakaOffsetIso } from "@/lib/utils";
+import { getDhakaCutoffIso, parseDhakaDateTime, toDateOnly, toDhakaOffsetIso } from "@/lib/utils";
 
 type AttendanceStatusValue = "present" | "late" | "half_day" | "absent" | "remote";
 
@@ -37,6 +37,16 @@ function buildAttendanceState(initialAttendance: WorkdayTimerSnapshot | null, da
 
 function getStorageKey(dayKey: string, currentUserId: string) {
   return `workday-timer:${currentUserId}:${dayKey}`;
+}
+
+export function clearStoredWorkdayTimer(dayKey: string, currentUserId: string) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(getStorageKey(dayKey, currentUserId));
+  } catch {
+    // ignore storage errors
+  }
 }
 
 function readStoredTimer(dayKey: string, currentUserId: string): StoredWorkdayTimer | null {
@@ -94,6 +104,28 @@ function parseJsonSafely(raw: string) {
   }
 }
 
+function getValidActiveCheckInAt(checkInAt: string | null, dayKey: string, nowMs: number) {
+  if (!checkInAt) {
+    return null;
+  }
+
+  const parsed = parseDhakaDateTime(checkInAt);
+
+  if (!parsed) {
+    return null;
+  }
+
+  if (toDateOnly(parsed) !== dayKey) {
+    return null;
+  }
+
+  if (parsed.getTime() > nowMs) {
+    return null;
+  }
+
+  return checkInAt;
+}
+
 export function DashboardWorkdayTimer({
   initialAttendance,
   currentUserId,
@@ -104,11 +136,22 @@ export function DashboardWorkdayTimer({
   mode?: "full" | "summary" | "button";
 }) {
   const router = useRouter();
+  const autoClosingRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [now, setNow] = useState<number | null>(null);
   const [dayKey, setDayKey] = useState(() => toDateOnly());
   const [accumulatedSeconds, setAccumulatedSeconds] = useState(0);
   const [attendance, setAttendance] = useState(() => buildAttendanceState(initialAttendance, toDateOnly()));
+
+  function resetLocalTimerState() {
+    setAccumulatedSeconds(0);
+    setAttendance((current) => ({
+      ...current,
+      checkInAt: null,
+      checkOutAt: null,
+    }));
+    clearStoredWorkdayTimer(dayKey, currentUserId);
+  }
 
   useEffect(() => {
     setNow(Date.now());
@@ -126,20 +169,52 @@ export function DashboardWorkdayTimer({
       initialAttendance?.checkInAt && toDateOnly(new Date(initialAttendance.checkInAt)) === dayKey;
 
     if (initialAttendanceDayMatches && initialAttendance?.checkInAt && !initialAttendance?.checkOutAt) {
+      const safeCheckInAt = getValidActiveCheckInAt(
+        initialAttendance.checkInAt,
+        dayKey,
+        Date.now(),
+      );
+
+      if (!safeCheckInAt) {
+        clearStoredWorkdayTimer(dayKey, currentUserId);
+        setAccumulatedSeconds(0);
+        setAttendance((current) => ({
+          ...current,
+          checkInAt: null,
+          checkOutAt: null,
+        }));
+        return;
+      }
+
       setAccumulatedSeconds(stored?.accumulatedSeconds ?? 0);
       setAttendance((current) => ({
         ...current,
-        checkInAt: stored?.lastCheckOutAt ? initialAttendance.checkInAt : (stored?.lastCheckInAt ?? initialAttendance.checkInAt),
+        checkInAt: stored?.lastCheckOutAt ? safeCheckInAt : (stored?.lastCheckInAt ?? safeCheckInAt),
         checkOutAt: null,
       }));
       return;
     }
 
     if (stored) {
+      const safeStoredCheckInAt = stored.lastCheckOutAt
+        ? null
+        : getValidActiveCheckInAt(stored.lastCheckInAt, dayKey, Date.now());
+
+      if (!stored.lastCheckOutAt && stored.lastCheckInAt && !safeStoredCheckInAt) {
+        clearStoredWorkdayTimer(dayKey, currentUserId);
+        setAccumulatedSeconds(0);
+        setAttendance((current) => ({
+          ...current,
+          checkInAt: null,
+          checkOutAt: null,
+        }));
+        return;
+      }
+
       setAccumulatedSeconds(stored.accumulatedSeconds);
       setAttendance((current) => ({
         ...current,
-        checkInAt: stored.lastCheckOutAt ? null : stored.lastCheckInAt,
+        checkInAt: safeStoredCheckInAt,
         checkOutAt: stored.lastCheckOutAt,
       }));
       return;
@@ -206,6 +281,59 @@ export function DashboardWorkdayTimer({
     return formatElapsedReadable(totalSeconds);
   }, [totalSeconds]);
 
+  useEffect(() => {
+    autoClosingRef.current = false;
+  }, [dayKey]);
+
+  useEffect(() => {
+    const safeActiveCheckInAt =
+      attendance.checkInAt && now !== null
+        ? getValidActiveCheckInAt(attendance.checkInAt, dayKey, now)
+        : null;
+
+    if (
+      saving ||
+      autoClosingRef.current ||
+      !safeActiveCheckInAt ||
+      attendance.checkOutAt ||
+      now === null ||
+      toDateOnly(safeActiveCheckInAt) !== dayKey
+    ) {
+      return;
+    }
+
+    if (attendance.checkInAt && !safeActiveCheckInAt) {
+      resetLocalTimerState();
+      return;
+    }
+
+    const cutoffIso = getDhakaCutoffIso(dayKey, 19, 30);
+    const cutoffAt = new Date(cutoffIso).getTime();
+
+    if (now < cutoffAt) {
+      return;
+    }
+
+    autoClosingRef.current = true;
+    const sessionSeconds = Math.max(0, Math.floor((cutoffAt - new Date(safeActiveCheckInAt).getTime()) / 1000));
+    const nextAccumulatedSeconds = accumulatedSeconds + sessionSeconds;
+
+    void persist(
+      {
+        ...attendance,
+        checkOutAt: cutoffIso,
+      },
+      "Attendance auto-closed at 7:30 PM.",
+    ).then(() => {
+      setAccumulatedSeconds(nextAccumulatedSeconds);
+      writeStoredTimer(dayKey, currentUserId, {
+        accumulatedSeconds: nextAccumulatedSeconds,
+        lastCheckInAt: safeActiveCheckInAt,
+        lastCheckOutAt: cutoffIso,
+      });
+    });
+  }, [accumulatedSeconds, attendance, currentUserId, dayKey, now, saving]);
+
   async function persist(next: typeof attendance, successMessage: string) {
     setSaving(true);
     const response = await fetch("/api/dashboard/attendance", {
@@ -257,9 +385,17 @@ export function DashboardWorkdayTimer({
 
   async function stopTimer() {
     if (saving || !attendance.checkInAt) return;
+    const safeCheckInAt = getValidActiveCheckInAt(attendance.checkInAt, dayKey, Date.now());
+
+    if (!safeCheckInAt) {
+      resetLocalTimerState();
+      router.refresh();
+      return;
+    }
+
     const stopTime = new Date();
     const nowLabel = toDhakaOffsetIso(stopTime);
-    const sessionSeconds = Math.max(0, Math.floor((stopTime.getTime() - new Date(attendance.checkInAt).getTime()) / 1000));
+    const sessionSeconds = Math.max(0, Math.floor((stopTime.getTime() - new Date(safeCheckInAt).getTime()) / 1000));
     const nextAccumulatedSeconds = accumulatedSeconds + sessionSeconds;
     await persist(
       {
@@ -271,7 +407,7 @@ export function DashboardWorkdayTimer({
     setAccumulatedSeconds(nextAccumulatedSeconds);
     writeStoredTimer(dayKey, currentUserId, {
       accumulatedSeconds: nextAccumulatedSeconds,
-      lastCheckInAt: attendance.checkInAt,
+      lastCheckInAt: safeCheckInAt,
       lastCheckOutAt: nowLabel,
     });
   }

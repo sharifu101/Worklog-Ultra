@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { DashboardTaskTimerAction } from "@/components/dashboard/dashboard-task-timer-action";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +67,8 @@ type RequestDraft = {
   desiredStatus: "done" | "in_progress" | "pending";
 };
 
+type HistoryTheme = "light" | "dark";
+
 function statusVariant(status?: "done" | "in_progress" | "pending") {
   if (status === "done") return "success";
   if (status === "pending") return "warning";
@@ -77,8 +81,84 @@ function requestVariant(status?: "pending" | "approved" | "rejected") {
   return "purple";
 }
 
-function formatTimeCell(value?: Date | null) {
-  return formatDateTimeInDhaka(value);
+function formatHistoryDateParts(value: Date | string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return {
+      day: "--",
+      monthYear: "Unknown date",
+      weekday: "",
+      compact: "Unknown date",
+    };
+  }
+
+  return {
+    day: new Intl.DateTimeFormat("en-BD", {
+      timeZone: "Asia/Dhaka",
+      day: "2-digit",
+    }).format(date),
+    monthYear: new Intl.DateTimeFormat("en-BD", {
+      timeZone: "Asia/Dhaka",
+      month: "short",
+      year: "numeric",
+    }).format(date),
+    weekday: new Intl.DateTimeFormat("en-BD", {
+      timeZone: "Asia/Dhaka",
+      weekday: "long",
+    }).format(date),
+    compact: new Intl.DateTimeFormat("en-BD", {
+      timeZone: "Asia/Dhaka",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(date),
+  };
+}
+
+function formatHistoryTimeParts(value?: Date | string | null) {
+  if (!value) {
+    return {
+      time: "Not set",
+      meridiem: "",
+      date: "Waiting for update",
+      isSet: false,
+    };
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return {
+      time: "Not set",
+      meridiem: "",
+      date: "Waiting for update",
+      isSet: false,
+    };
+  }
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Dhaka",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(date);
+
+  const hour = parts.find((part) => part.type === "hour")?.value ?? "--";
+  const minute = parts.find((part) => part.type === "minute")?.value ?? "--";
+  const meridiem = parts.find((part) => part.type === "dayPeriod")?.value ?? "";
+
+  return {
+    time: `${hour}:${minute}`,
+    meridiem,
+    date: new Intl.DateTimeFormat("en-BD", {
+      timeZone: "Asia/Dhaka",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(date),
+    isSet: true,
+  };
 }
 
 function formatTrackedMinutes(totalMinutes: number) {
@@ -89,6 +169,41 @@ function formatTrackedMinutes(totalMinutes: number) {
   }
 
   return `${totalMinutes} min`;
+}
+
+function formatMinutesAsHours(totalMinutes: number) {
+  const safeMinutes = Math.max(0, totalMinutes);
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+function getContinuationOverview(task: HistoryItem) {
+  const continuationMeta = extractContinuationMeta(task.taskDescription);
+
+  if (!continuationMeta) {
+    return null;
+  }
+
+  const previousDayLog =
+    continuationMeta.dailyLogs.length > 0
+      ? continuationMeta.dailyLogs[continuationMeta.dailyLogs.length - 1]
+      : null;
+  const currentTrackedMinutes = task.updates[0]?.trackedMinutes ?? 0;
+  const currentProgress = task.updates[0]?.completionPercent ?? 0;
+  const previousTrackedMinutes = (continuationMeta.dailyLogs ?? []).reduce((sum, entry) => sum + entry.trackedMinutes, 0);
+  const totalDays = Math.max(continuationMeta.daysActive || 0, continuationMeta.dailyLogs.length, 1);
+
+  return {
+    sourceDate: continuationMeta.sourceDate,
+    previousDayLog,
+    currentTrackedMinutes,
+    currentProgress,
+    totalDays,
+    overallTrackedMinutes: previousTrackedMinutes + currentTrackedMinutes,
+    lastNote: continuationMeta.note,
+    dailyLogs: continuationMeta.dailyLogs,
+  };
 }
 
 function getTrackedTone(totalMinutes: number) {
@@ -106,25 +221,98 @@ function getRecencyMeta(task: HistoryItem) {
 
   if (entryDay === today) {
     return {
-      label: "Recent",
-      chip: "bg-violet-50 text-violet-700",
-      row: "bg-violet-50/40",
+      label: "Today",
+      chip: "bg-violet-50 text-violet-700 dark:bg-violet-400/15 dark:text-violet-200",
+      row: "history-row history-row-recent",
+      tone: "recent" as const,
     };
   }
 
   if (entryDay === yesterday) {
     return {
       label: "Yesterday",
-      chip: "bg-sky-50 text-sky-700",
-      row: "bg-sky-50/30",
+      chip: "bg-sky-50 text-sky-700 dark:bg-sky-400/15 dark:text-sky-200",
+      row: "history-row history-row-yesterday",
+      tone: "yesterday" as const,
     };
   }
 
   return {
     label: null,
     chip: "",
-    row: "",
+    row: "history-row history-row-default",
+    tone: "default" as const,
   };
+}
+
+function getThemeStyles(theme: HistoryTheme) {
+  if (theme === "light") {
+    return {
+      shell: {
+        background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)",
+      } satisfies CSSProperties,
+      defaultRow: {
+        background: "linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 247, 255, 0.98) 100%)",
+        borderColor: "rgba(148, 163, 184, 0.24)",
+        boxShadow: "0 14px 30px rgba(148, 163, 184, 0.16)",
+      } satisfies CSSProperties,
+      recentRow: {
+        background: "linear-gradient(135deg, rgba(239, 246, 255, 0.99) 0%, rgba(224, 238, 255, 0.99) 100%)",
+        borderColor: "rgba(96, 165, 250, 0.32)",
+        boxShadow: "0 14px 32px rgba(96, 165, 250, 0.16)",
+      } satisfies CSSProperties,
+      yesterdayRow: {
+        background: "linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(235, 243, 255, 0.96) 100%)",
+        borderColor: "rgba(125, 211, 252, 0.28)",
+        boxShadow: "0 14px 30px rgba(125, 211, 252, 0.12)",
+      } satisfies CSSProperties,
+      departmentChip: {
+        background: "rgba(255, 255, 255, 0.62)",
+        borderColor: "rgba(251, 146, 60, 0.28)",
+        color: "var(--foreground)",
+      } satisfies CSSProperties,
+      dailyLogChip: {
+        background: "rgba(255, 255, 255, 0.16)",
+      } satisfies CSSProperties,
+    };
+  }
+
+  return {
+    shell: {
+      background: "linear-gradient(180deg, rgba(19, 29, 45, 0.96) 0%, rgba(15, 23, 37, 0.98) 100%)",
+    } satisfies CSSProperties,
+    defaultRow: {
+      background: "linear-gradient(135deg, rgba(41, 30, 12, 0.96) 0%, rgba(67, 33, 13, 0.94) 100%)",
+      borderColor: "rgba(180, 124, 38, 0.38)",
+      boxShadow: "0 14px 34px rgba(0, 0, 0, 0.26)",
+    } satisfies CSSProperties,
+    recentRow: {
+      background: "linear-gradient(135deg, rgba(76, 29, 12, 0.98) 0%, rgba(120, 53, 15, 0.94) 100%)",
+      borderColor: "rgba(245, 158, 11, 0.34)",
+      boxShadow: "0 16px 36px rgba(0, 0, 0, 0.3)",
+    } satisfies CSSProperties,
+    yesterdayRow: {
+      background: "linear-gradient(135deg, rgba(51, 65, 85, 0.96) 0%, rgba(120, 53, 15, 0.84) 100%)",
+      borderColor: "rgba(148, 163, 184, 0.3)",
+      boxShadow: "0 14px 34px rgba(0, 0, 0, 0.26)",
+    } satisfies CSSProperties,
+    departmentChip: {
+      background: "rgba(255, 255, 255, 0.1)",
+      borderColor: "rgba(255, 255, 255, 0.2)",
+      color: "var(--foreground)",
+    } satisfies CSSProperties,
+    dailyLogChip: {
+      background: "rgba(255, 255, 255, 0.1)",
+    } satisfies CSSProperties,
+  };
+}
+
+function getRowStyle(theme: HistoryTheme, tone: "default" | "recent" | "yesterday") {
+  const styles = getThemeStyles(theme);
+
+  if (tone === "recent") return styles.recentRow;
+  if (tone === "yesterday") return styles.yesterdayRow;
+  return styles.defaultRow;
 }
 
 function getReasonSections(reason: string) {
@@ -169,6 +357,7 @@ export function HistoryTable({
   initialRequestId?: string;
 }) {
   const router = useRouter();
+  const [theme, setTheme] = useState<HistoryTheme>("dark");
   const [requestDrafts, setRequestDrafts] = useState<Record<string, RequestDraft>>({});
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -178,6 +367,19 @@ export function HistoryTable({
   const visibleHistory = useMemo(() => {
     return history;
   }, [history, mode, role]);
+
+  useEffect(() => {
+    const syncTheme = () => {
+      setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+    };
+
+    syncTheme();
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (initialRequestId) {
@@ -345,12 +547,26 @@ export function HistoryTable({
         <TaskManageControls
           compact
           hideDoneAction
+          showInlineDelete
           task={{
             id: task.id,
             taskTitle: task.taskTitle,
             taskDescription: task.taskDescription,
             priority: (task as { priority?: "low" | "normal" | "high" | "critical" }).priority ?? "normal",
           }}
+          timerPanel={
+            task.isToday && task.canEmployeeEdit && task.updates[0]?.status === "in_progress" ? (
+              <DashboardTaskTimerAction
+                canEdit
+                initialActualEnd={task.updates[0]?.actualEnd ?? null}
+                initialActualStart={task.updates[0]?.actualStart ?? null}
+                initialStatus={task.updates[0]?.status ?? "pending"}
+                initialTrackedMinutes={task.updates[0]?.trackedMinutes ?? 0}
+                reportDate={reportDate}
+                taskId={task.id}
+              />
+            ) : null
+          }
         />
       </div>
     );
@@ -359,21 +575,17 @@ export function HistoryTable({
   const selectedTaskDraft = selectedTask ? getDraft(selectedTask.id) : null;
   const selectedTaskReasonSections = selectedTask?.latestRequest ? getReasonSections(selectedTask.latestRequest.reason) : [];
   const selectedRequestReasonSections = selectedRequest ? getReasonSections(selectedRequest.reason) : [];
+  const themeStyles = getThemeStyles(theme);
 
   return (
     <div className="space-y-5">
       {!(mode === "requests" && role === "manager") ? (
-        <div className="overflow-x-auto rounded-[24px] border border-[var(--panel-border)] bg-[linear-gradient(180deg,#f8fbff_0%,#eef4ff_100%)] p-2">
-          <Table>
+        <div className="history-table-shell overflow-x-auto rounded-[24px] border border-[var(--panel-border)] p-2" style={themeStyles.shell}>
+          <Table className="border-separate border-spacing-y-3">
             <THead>
               <TR>
                 <TH>Date</TH>
-                <TH>Task</TH>
-                <TH>Department</TH>
-                <TH>Status</TH>
-                <TH>Started</TH>
-                <TH>Ended</TH>
-                <TH>Tracked</TH>
+                <TH>Task Details</TH>
                 <TH>Action</TH>
               </TR>
             </THead>
@@ -381,38 +593,88 @@ export function HistoryTable({
               {(visibleHistory ?? []).map((task) => {
                 const latestStatus = task.updates[0]?.status;
                 const recency = getRecencyMeta(task);
+                const rowStyle = getRowStyle(theme, recency.tone ?? "default");
+                const dateParts = formatHistoryDateParts(task.planDate);
+                const startedParts = formatHistoryTimeParts(task.updates[0]?.actualStart);
+                const endedParts = formatHistoryTimeParts(task.updates[0]?.actualEnd);
 
                 return (
-                  <TR key={task.id} className={`align-top ${recency.row || "bg-white/70"} border-b border-[var(--panel-border)] last:border-b-0`}>
-                    <TD>
-                      <div className="space-y-2">
-                        <div className="font-medium text-[var(--foreground)]">{toDateOnly(task.planDate)}</div>
-                        {recency.label ? <Badge variant="secondary">{recency.label}</Badge> : null}
+                  <TR
+                    key={task.id}
+                    className="align-top border-0"
+                  >
+                    <TD className={`${recency.row} rounded-l-[22px] border border-r-0 px-4 py-5 text-[var(--foreground)]`} style={rowStyle}>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
+                            {dateParts.weekday}
+                          </p>
+                          <div className="mt-2 flex items-end gap-2">
+                            <span className="text-3xl font-black leading-none text-[var(--foreground)]">{dateParts.day}</span>
+                            <span className="pb-1 text-sm font-semibold text-[var(--muted-foreground)]">{dateParts.monthYear}</span>
+                          </div>
+                        </div>
+                        {recency.label ? <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] ${recency.chip}`}>{recency.label}</span> : null}
                       </div>
                     </TD>
-                    <TD className="space-y-2">
-                      <div className="font-semibold text-[var(--foreground)]">{task.taskTitle}</div>
+                    <TD className={`${recency.row} space-y-2 border-y px-4 py-5 text-[var(--foreground)]`} style={rowStyle}>
+                      <div className="space-y-2">
+                        <div className="text-lg font-bold leading-snug text-[var(--foreground)]">{task.taskTitle}</div>
+                        <p className="text-sm font-medium text-[var(--muted-foreground)]">
+                          Created for {dateParts.compact}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border px-2.5 py-1 text-xs font-semibold text-[var(--foreground)]" style={themeStyles.departmentChip}>
+                          {task.department.name}
+                        </span>
+                        <Badge variant={statusVariant(latestStatus)}>{latestStatus ?? "planned"}</Badge>
+                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getTrackedTone(task.updates[0]?.trackedMinutes ?? 0)}`}>
+                          {formatTrackedMinutes(task.updates[0]?.trackedMinutes ?? 0)}
+                        </span>
+                      </div>
                       {extractContinuationMeta(task.taskDescription) ? (
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="purple">Continued</Badge>
-                          <span className="text-xs text-[var(--muted-foreground)]">
-                            From {extractContinuationMeta(task.taskDescription)?.sourceDate}
+                          <span className="text-sm font-medium text-[var(--muted-foreground)]">
+                            Running from {extractContinuationMeta(task.taskDescription)?.sourceDate}
                           </span>
                         </div>
                       ) : null}
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-2xl border border-white/10 bg-white/35 px-4 py-3 dark:bg-white/5">
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Started</span>
+                          <div className="mt-2 flex items-end gap-2">
+                            <p className={`text-xl font-black leading-none ${startedParts.isSet ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}>
+                              {startedParts.time}
+                            </p>
+                            {startedParts.meridiem ? (
+                              <span className="mb-0.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300">
+                                {startedParts.meridiem}
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-sm font-medium text-[var(--muted-foreground)]">{startedParts.date}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/35 px-4 py-3 dark:bg-white/5">
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Ended</span>
+                          <div className="mt-2 flex items-end gap-2">
+                            <p className={`text-xl font-black leading-none ${endedParts.isSet ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}>
+                              {endedParts.time}
+                            </p>
+                            {endedParts.meridiem ? (
+                              <span className="mb-0.5 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-300">
+                                {endedParts.meridiem}
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-sm font-medium text-[var(--muted-foreground)]">{endedParts.date}</p>
+                        </div>
+                      </div>
                     </TD>
-                    <TD>{task.department.name}</TD>
-                    <TD>
-                      <Badge variant={statusVariant(latestStatus)}>{latestStatus ?? "planned"}</Badge>
+                    <TD className={`${recency.row} min-w-[220px] rounded-r-[22px] border border-l-0 px-4 py-5 text-[var(--foreground)]`} style={rowStyle}>
+                      {renderAction(task)}
                     </TD>
-                    <TD>{formatTimeCell(task.updates[0]?.actualStart)}</TD>
-                    <TD>{formatTimeCell(task.updates[0]?.actualEnd)}</TD>
-                    <TD>
-                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getTrackedTone(task.updates[0]?.trackedMinutes ?? 0)}`}>
-                        {formatTrackedMinutes(task.updates[0]?.trackedMinutes ?? 0)}
-                      </span>
-                    </TD>
-                    <TD className="min-w-[220px]">{renderAction(task)}</TD>
                   </TR>
                 );
               })}
@@ -454,11 +716,13 @@ export function HistoryTable({
                 </div>
                 <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Started</p>
-                  <p className="mt-2 text-sm text-white">{formatTimeCell(selectedTask.updates[0]?.actualStart)}</p>
+                  <p className="mt-2 text-xl font-bold text-white">{formatHistoryTimeParts(selectedTask.updates[0]?.actualStart).time}</p>
+                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">{formatHistoryTimeParts(selectedTask.updates[0]?.actualStart).date}</p>
                 </div>
                 <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Ended</p>
-                  <p className="mt-2 text-sm text-white">{formatTimeCell(selectedTask.updates[0]?.actualEnd)}</p>
+                  <p className="mt-2 text-xl font-bold text-white">{formatHistoryTimeParts(selectedTask.updates[0]?.actualEnd).time}</p>
+                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">{formatHistoryTimeParts(selectedTask.updates[0]?.actualEnd).date}</p>
                 </div>
               </div>
 
@@ -475,38 +739,87 @@ export function HistoryTable({
 
               <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Work Note</p>
-                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-white/90">
+                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[var(--foreground)] dark:text-white/90">
                   {selectedTask.updates[0]?.note || "No extra note added for this report."}
                 </p>
               </div>
 
               {extractContinuationMeta(selectedTask.taskDescription) ? (
-                <div className="rounded-2xl border border-violet-400/30 bg-violet-500/10 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-violet-200">Continuation</p>
-                  <div className="mt-2 space-y-2 text-sm text-white/90">
-                    <p>From: {extractContinuationMeta(selectedTask.taskDescription)?.sourceDate || "Previous day"}</p>
-                    <p>Days Active: {extractContinuationMeta(selectedTask.taskDescription)?.daysActive || 1}</p>
-                    <p>Progress: {extractContinuationMeta(selectedTask.taskDescription)?.progressLabel || "Not set"}</p>
-                    <p>Time Logged: {extractContinuationMeta(selectedTask.taskDescription)?.timeLabel || "Not set"}</p>
-                    {extractContinuationMeta(selectedTask.taskDescription)?.note ? (
-                      <p className="whitespace-pre-line">Last Note: {extractContinuationMeta(selectedTask.taskDescription)?.note}</p>
-                    ) : null}
-                    {extractContinuationMeta(selectedTask.taskDescription)?.dailyLogs?.length ? (
-                      <div className="rounded-2xl border border-violet-300/20 bg-slate-950/20 p-3">
-                        <p className="text-xs uppercase tracking-[0.18em] text-violet-100">Daily Work Log</p>
+                <div className="rounded-2xl border border-violet-300/40 bg-violet-50 p-4 dark:border-violet-400/30 dark:bg-violet-500/10">
+                  <p className="text-xs uppercase tracking-[0.18em] text-violet-700 dark:text-violet-200">Continuation</p>
+                  {(() => {
+                    const continuationOverview = getContinuationOverview(selectedTask);
+
+                    if (!continuationOverview) {
+                      return null;
+                    }
+
+                    return (
+                      <div className="mt-3 space-y-4 text-sm text-slate-700 dark:text-white/90">
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-2xl border border-violet-200 bg-white/80 px-3 py-3 dark:border-violet-300/20 dark:bg-slate-950/20">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-200">Previous Day</p>
+                            <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                              {continuationOverview.previousDayLog
+                                ? formatMinutesAsHours(continuationOverview.previousDayLog.trackedMinutes)
+                                : "0h 00m"}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-white/70">
+                              {continuationOverview.previousDayLog?.date ?? "No saved day log"}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-sky-200 bg-white/80 px-3 py-3 dark:border-sky-300/20 dark:bg-slate-950/20">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-200">Current Day</p>
+                            <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                              {formatMinutesAsHours(continuationOverview.currentTrackedMinutes)}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-white/70">
+                              Progress {continuationOverview.currentProgress}%
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-emerald-200 bg-white/80 px-3 py-3 dark:border-emerald-300/20 dark:bg-slate-950/20">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-200">Overall Work</p>
+                            <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                              {formatMinutesAsHours(continuationOverview.overallTrackedMinutes)}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-white/70">
+                              {continuationOverview.totalDays} active day{continuationOverview.totalDays > 1 ? "s" : ""}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-amber-200 bg-white/80 px-3 py-3 dark:border-amber-300/20 dark:bg-slate-950/20">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-200">Started From</p>
+                            <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                              {continuationOverview.sourceDate || "Previous day"}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-white/70">
+                              Latest progress {continuationOverview.currentProgress}%
+                            </p>
+                          </div>
+                        </div>
+                        {continuationOverview.lastNote ? (
+                          <div className="rounded-2xl border border-violet-200 bg-white/70 px-3 py-3 text-sm text-slate-700 dark:border-violet-300/20 dark:bg-slate-950/20 dark:text-white/85">
+                            <span className="font-semibold text-violet-700 dark:text-violet-200">Last Note:</span>{" "}
+                            {continuationOverview.lastNote}
+                          </div>
+                        ) : null}
+                        {continuationOverview.dailyLogs.length ? (
+                      <div className="rounded-2xl border border-violet-200 bg-white/75 p-3 dark:border-violet-300/20 dark:bg-slate-950/20">
+                        <p className="text-xs uppercase tracking-[0.18em] text-violet-700 dark:text-violet-100">Daily Work Log</p>
                         <div className="mt-2 space-y-2">
-                          {(extractContinuationMeta(selectedTask.taskDescription)?.dailyLogs ?? []).map((entry) => (
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-white/85" key={`${selectedTask.id}-${entry.date}`}>
-                              <span className="rounded-full bg-white/10 px-2 py-1">{entry.date}</span>
+                          {(continuationOverview.dailyLogs ?? []).map((entry) => (
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-white/85" key={`${selectedTask.id}-${entry.date}`}>
+                              <span className="rounded-full bg-violet-100 px-2 py-1 text-violet-800 dark:bg-white/10 dark:text-white/85">{entry.date}</span>
                               <span>{entry.progress}% done</span>
                               <span>{entry.trackedMinutes} min</span>
-                              {entry.note ? <span className="text-white/70">Note: {entry.note}</span> : null}
+                              {entry.note ? <span className="text-slate-500 dark:text-white/70">Note: {entry.note}</span> : null}
                             </div>
                           ))}
                         </div>
                       </div>
-                    ) : null}
-                  </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : null}
 
@@ -559,7 +872,7 @@ export function HistoryTable({
                   {(selectedRequestReasonSections ?? []).map((section, index) => (
                     <div key={`${section.label}-${index}`}>
                       <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">{section.label}</p>
-                      <p className="mt-1 whitespace-pre-line text-sm text-white/90">{section.value}</p>
+                      <p className="mt-1 whitespace-pre-line text-sm text-[var(--foreground)] dark:text-white/90">{section.value}</p>
                     </div>
                   ))}
                 </div>

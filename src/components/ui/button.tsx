@@ -10,7 +10,7 @@ const buttonVariants = cva(
         default:
           "button-force-white border-transparent bg-[var(--ring)] px-4 py-2 text-white hover:bg-[#5683ff]",
         secondary:
-          "border-[var(--panel-border)] bg-[var(--panel-alt)] px-4 py-2 text-[var(--foreground)] hover:bg-[#2a3c55]",
+          "border-[var(--panel-border)] bg-[var(--panel-alt)] px-4 py-2 text-[var(--foreground)] hover:bg-[#2a3c55] hover:text-white",
         outline:
           "border-[var(--panel-border)] bg-transparent px-4 py-2 text-[var(--foreground)] hover:bg-[var(--panel-alt)]",
         ghost:

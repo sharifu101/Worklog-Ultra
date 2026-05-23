@@ -5,6 +5,7 @@ import { DashboardProgressCard } from "@/components/dashboard/dashboard-progress
 import { DashboardRecurringQuickAdd } from "@/components/dashboard/dashboard-recurring-quick-add";
 import { DashboardTaskNotifier } from "@/components/dashboard/dashboard-task-notifier";
 import { DashboardTaskTimerAction } from "@/components/dashboard/dashboard-task-timer-action";
+import { DashboardTimeSummary } from "@/components/dashboard/dashboard-time-summary";
 import { DashboardWorkdayTimer } from "@/components/dashboard/dashboard-workday-timer";
 import { DashboardWorkspaceModal } from "@/components/dashboard/dashboard-workspace-modal";
 import { AssignmentReviewControls } from "@/components/dashboard/assignment-review-controls";
@@ -695,24 +696,13 @@ export default async function DashboardPage() {
             plannedTasks={plannedTasks}
           />
 
-          <div className="rounded-[24px] border border-[var(--panel-border)] bg-[var(--panel)] p-4 shadow-[var(--shadow)]">
-            <h3 className="text-[1.05rem] font-bold text-[var(--foreground)]">Time Summary</h3>
-            <div className="mt-4 space-y-3">
-              {[
-                { label: "Planned Work Time", value: formatDurationFromMinutes(targetMinutes) },
-                { label: "Actual Work Time", value: formatHoursAndMinutes(data.kpis.worklogHours) },
-                { label: "Break Time", value: "30m" },
-                { label: "Remaining Time", value: formatDurationFromMinutes(remainingMinutes) },
-              ].map((item) => (
-                <div className="flex items-center justify-between gap-4 border-b border-[var(--panel-border)] pb-2.5 last:border-b-0 last:pb-0" key={item.label}>
-                  <span className="text-[13px] font-medium text-[var(--muted-foreground)]">{item.label}</span>
-                  <span className={`text-[13px] font-bold whitespace-nowrap ${item.label === "Remaining Time" ? "text-rose-500" : "text-[var(--foreground)]"}`}>
-                    {item.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <DashboardTimeSummary
+            plannedTasks={plannedTasks}
+            tasks={(data.tasks ?? []).map((task) => ({
+              id: task.id,
+              trackedMinutes: task.updates[0]?.trackedMinutes ?? 0,
+            }))}
+          />
 
           <div className="rounded-[24px] border border-[var(--panel-border)] bg-[var(--panel)] p-4 shadow-[var(--shadow)]">
             <h3 className="text-[1.05rem] font-bold text-[var(--foreground)]">Attendance</h3>

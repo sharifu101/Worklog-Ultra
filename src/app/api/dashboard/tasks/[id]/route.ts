@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { embedHistoryMeta } from "@/lib/task-history-shared";
 import { buildContinuationDescription } from "@/lib/task-continuation";
 import { addDays } from "date-fns";
+import { stripHistoryMeta } from "@/lib/task-history-shared";
 import { toDateOnly } from "@/lib/utils";
 
 async function findVisibleTask(id: string, actor: Awaited<ReturnType<typeof requireUser>>) {
@@ -165,6 +166,13 @@ export async function POST(
       const resumedStatus =
         latestUpdate && (latestUpdate.trackedMinutes > 0 || latestUpdate.actualStart) ? "in_progress" : "pending";
 
+      await db.dailyTask.update({
+        where: { id: task.id },
+        data: {
+          taskDescription: stripHistoryMeta(task.taskDescription) || null,
+        },
+      });
+
       if (latestUpdate) {
         await db.dailyTaskUpdate.update({
           where: {
@@ -188,7 +196,7 @@ export async function POST(
     }
 
     const continuationNote = buildContinuationDescription({
-      originalDescription: task.taskDescription,
+      originalDescription: stripHistoryMeta(task.taskDescription),
       sourceDate: toDateOnly(task.planDate),
       completionPercent: latestUpdate?.completionPercent ?? 0,
       trackedMinutes: latestUpdate?.trackedMinutes ?? 0,

@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const user = await requireUser();
   const departments = await getDepartments();
+  const avatar_url = user.avatarUrl ?? null;
 
   return (
     <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
@@ -21,7 +22,7 @@ export default async function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
             <Avatar>
-              {user.avatarUrl ? <AvatarImage alt={user.name} src={user.avatarUrl} /> : null}
+              {avatar_url ? <AvatarImage alt={user.name} src={avatar_url} /> : null}
               <AvatarFallback>{user.name.slice(0, 1)}</AvatarFallback>
             </Avatar>
             <div>
@@ -55,7 +56,7 @@ export default async function SettingsPage() {
               designation: user.designation,
               phone: user.phone,
               location: user.location,
-              avatarUrl: user.avatarUrl,
+              avatar_url,
               monthlySalary: user.monthlySalary ? Number(user.monthlySalary) : null,
               expectedDailyHours: user.expectedDailyHours ? Number(user.expectedDailyHours) : 8,
               departmentId: user.departmentId,

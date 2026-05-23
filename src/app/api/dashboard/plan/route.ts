@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { apiError, apiSuccess } from "@/lib/api";
 import { requireEmployee } from "@/lib/auth/server";
 import { db } from "@/lib/db";
+import { toDateOnly } from "@/lib/utils";
 import { planSubmissionSchema } from "@/lib/validators/worklog";
 
 export async function POST(request: NextRequest) {
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
     return apiError(parsed.error.issues[0]?.message ?? "Invalid plan submission.");
   }
 
-  const planDate = new Date(parsed.data.planDate);
+  const planDate = new Date(toDateOnly(parsed.data.planDate));
   const normalizedTasks = parsed.data.tasks.map((task) => ({
     ...task,
     normalizedTitle: task.taskTitle.trim().toLowerCase(),
@@ -31,14 +32,15 @@ export async function POST(request: NextRequest) {
   }
 
   const assigneeIds = parsed.data.tasks.map((task) => task.assigneeId ?? user.id);
+  const uniqueAssigneeIds = Array.from(new Set(assigneeIds));
   const activeAssigneeCount = await db.user.count({
     where: {
-      id: { in: assigneeIds },
+      id: { in: uniqueAssigneeIds },
       isActive: true,
     },
   });
 
-  if (activeAssigneeCount !== assigneeIds.length) {
+  if (activeAssigneeCount !== uniqueAssigneeIds.length) {
     return apiError("One or more selected assignees are not active.");
   }
 

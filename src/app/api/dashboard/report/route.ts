@@ -1,11 +1,38 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess } from "@/lib/api";
+import { buildAssignmentReviewReason, ASSIGNMENT_REVIEW_PREFIX } from "@/lib/assignment-review";
 import { requireEmployee } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 import { buildContinuationDescription } from "@/lib/task-continuation";
 import { addDays } from "date-fns";
-import { toDateOnly } from "@/lib/utils";
+import { parseDhakaDateTime, toDateOnly } from "@/lib/utils";
 import { reportSubmissionSchema } from "@/lib/validators/worklog";
+
+function parseReportDateTime(value?: string) {
+  if (!value) {
+    return null;
+  }
+
+  return parseDhakaDateTime(value);
+}
+
+function hasMeaningfulAssignmentSubmission(update: {
+  status: "done" | "in_progress" | "pending";
+  note?: string;
+  completionPercent: number;
+  trackedMinutes: number;
+  actualStart?: string;
+  actualEnd?: string;
+}) {
+  return Boolean(
+    update.status !== "pending" ||
+      update.note?.trim() ||
+      update.completionPercent > 0 ||
+      update.trackedMinutes > 0 ||
+      update.actualStart ||
+      update.actualEnd,
+  );
+}
 
 export async function POST(request: NextRequest) {
   const user = await requireEmployee();
@@ -60,8 +87,8 @@ export async function POST(request: NextRequest) {
           note: update.note || null,
           completionPercent: update.completionPercent,
           trackedMinutes: update.trackedMinutes,
-          actualStart: update.actualStart ? new Date(update.actualStart) : null,
-          actualEnd: update.actualEnd ? new Date(update.actualEnd) : null,
+          actualStart: parseReportDateTime(update.actualStart),
+          actualEnd: parseReportDateTime(update.actualEnd),
           difficultyLevel: update.difficultyLevel || null,
         },
         create: {
@@ -71,8 +98,8 @@ export async function POST(request: NextRequest) {
           note: update.note || null,
           completionPercent: update.completionPercent,
           trackedMinutes: update.trackedMinutes,
-          actualStart: update.actualStart ? new Date(update.actualStart) : null,
-          actualEnd: update.actualEnd ? new Date(update.actualEnd) : null,
+          actualStart: parseReportDateTime(update.actualStart),
+          actualEnd: parseReportDateTime(update.actualEnd),
           difficultyLevel: update.difficultyLevel || null,
         },
       }),
@@ -80,6 +107,60 @@ export async function POST(request: NextRequest) {
   );
 
   const tasksById = new Map(tasks.map((task) => [task.id, task]));
+
+  const assignmentSubmissionUpdates = parsed.data.updates.filter((update) => {
+    const task = tasksById.get(update.dailyTaskId);
+    return task?.assignedBy && hasMeaningfulAssignmentSubmission(update);
+  });
+
+  if (assignmentSubmissionUpdates.length) {
+    await db.$transaction(async (tx) => {
+      for (const update of assignmentSubmissionUpdates) {
+        const task = tasksById.get(update.dailyTaskId);
+
+        if (!task?.assignedBy) {
+          continue;
+        }
+
+        const submitNote =
+          update.note?.trim() ||
+          `Progress updated: ${update.completionPercent}% complete, ${update.trackedMinutes} min tracked.`;
+
+        const existingPending = await tx.reportEditRequest.findFirst({
+          where: {
+            dailyTaskId: task.id,
+            requestedById: user.id,
+            status: "pending",
+            reason: { startsWith: ASSIGNMENT_REVIEW_PREFIX },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (existingPending) {
+          await tx.reportEditRequest.update({
+            where: { id: existingPending.id },
+            data: {
+              reason: buildAssignmentReviewReason(submitNote),
+              reviewerId: null,
+              reviewNote: null,
+              reviewedAt: null,
+              status: "pending",
+            },
+          });
+          continue;
+        }
+
+        await tx.reportEditRequest.create({
+          data: {
+            dailyTaskId: task.id,
+            requestedById: user.id,
+            reason: buildAssignmentReviewReason(submitNote),
+          },
+        });
+      }
+    });
+  }
+
   const shouldAutoContinue = (update: (typeof parsed.data.updates)[number]) =>
     update.status !== "done" &&
     update.completionPercent < 100 &&

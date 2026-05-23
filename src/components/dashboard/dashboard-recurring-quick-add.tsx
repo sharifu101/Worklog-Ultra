@@ -158,6 +158,7 @@ export function DashboardRecurringQuickAdd({
                   allowOtherDepartment={allowOtherDepartment}
                   currentUserId={currentUserId}
                   departments={departments}
+                  onSaved={() => setManageOpen(false)}
                   userDepartmentId={currentUserDepartmentId}
                 />
               </div>

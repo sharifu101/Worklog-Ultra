@@ -1,9 +1,11 @@
 import { ReportEditRequestStatus, UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess } from "@/lib/api";
+import { embedAssignmentAttachmentMeta, extractAssignmentAttachmentMeta } from "@/lib/assignment-attachments";
 import { requireUser } from "@/lib/auth/server";
-import { buildAssignmentReviewReason, extractAssignmentReviewReason, ASSIGNMENT_REVIEW_PREFIX } from "@/lib/assignment-review";
+import { buildAssignmentReviewReason, extractAssignmentReviewPayload, ASSIGNMENT_REVIEW_PREFIX } from "@/lib/assignment-review";
 import { db } from "@/lib/db";
+import { saveUploadedFiles } from "@/lib/file-upload";
 
 function serializeReview(
   request: {
@@ -24,8 +26,10 @@ function serializeReview(
   return {
     id: request.id,
     status: request.status,
-    submitNote: extractAssignmentReviewReason(request.reason) ?? "",
-    reviewNote: request.reviewNote,
+    submitNote: extractAssignmentReviewPayload(request.reason)?.note ?? "",
+    submitAttachments: extractAssignmentReviewPayload(request.reason)?.attachments ?? [],
+    reviewNote: extractAssignmentAttachmentMeta(request.reviewNote).text,
+    reviewAttachments: extractAssignmentAttachmentMeta(request.reviewNote).attachments,
     createdAt: request.createdAt,
     reviewedAt: request.reviewedAt,
     requestedById: request.requestedById,
@@ -39,9 +43,15 @@ export async function POST(
 ) {
   const actor = await requireUser();
   const { id } = await params;
-  const body = await request.json().catch(() => ({}));
-  const action = typeof body?.action === "string" ? body.action : "";
-  const note = typeof body?.note === "string" ? body.note.trim() : "";
+  const contentType = request.headers.get("content-type") ?? "";
+  const isMultipart = contentType.includes("multipart/form-data");
+  const body = isMultipart ? await request.formData() : await request.json().catch(() => ({}));
+  const action = typeof body?.get === "function" ? String(body.get("action") ?? "") : typeof body?.action === "string" ? body.action : "";
+  const note = typeof body?.get === "function" ? String(body.get("note") ?? "").trim() : typeof body?.note === "string" ? body.note.trim() : "";
+  const attachments =
+    typeof body?.getAll === "function"
+      ? body.getAll("attachments").filter((entry: FormDataEntryValue): entry is File => entry instanceof File && entry.size > 0)
+      : [];
 
   if (!["submit", "approve", "reject"].includes(action)) {
     return apiError("Invalid assignment review action.", 400);
@@ -74,6 +84,13 @@ export async function POST(
       return apiError("Add a short submit note first.", 400);
     }
 
+    let uploadedAttachments = [];
+    try {
+      uploadedAttachments = await saveUploadedFiles(attachments, "assignments");
+    } catch (error) {
+      return apiError(error instanceof Error ? error.message : "Assignment files could not be uploaded.");
+    }
+
     const existingPending = await db.reportEditRequest.findFirst({
       where: {
         dailyTaskId: task.id,
@@ -85,11 +102,11 @@ export async function POST(
     });
 
     const saved =
-      existingPending
+          existingPending
         ? await db.reportEditRequest.update({
             where: { id: existingPending.id },
             data: {
-              reason: buildAssignmentReviewReason(note),
+              reason: buildAssignmentReviewReason(note, uploadedAttachments),
               reviewerId: null,
               reviewNote: null,
               reviewedAt: null,
@@ -100,7 +117,7 @@ export async function POST(
             data: {
               dailyTaskId: task.id,
               requestedById: actor.id,
-              reason: buildAssignmentReviewReason(note),
+              reason: buildAssignmentReviewReason(note, uploadedAttachments),
             },
           });
 
@@ -128,11 +145,17 @@ export async function POST(
   }
 
   const decision = action === "approve" ? "approved" : "rejected";
+  let uploadedAttachments = [];
+  try {
+    uploadedAttachments = await saveUploadedFiles(attachments, "assignments");
+  } catch (error) {
+    return apiError(error instanceof Error ? error.message : "Review files could not be uploaded.");
+  }
   const updated = await db.reportEditRequest.update({
     where: { id: latestPending.id },
     data: {
       status: decision,
-      reviewNote: note || null,
+      reviewNote: embedAssignmentAttachmentMeta(note || "", uploadedAttachments) || null,
       reviewerId: actor.id,
       reviewedAt: new Date(),
     },
