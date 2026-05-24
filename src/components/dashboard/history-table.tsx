@@ -597,6 +597,7 @@ export function HistoryTable({
                 const dateParts = formatHistoryDateParts(task.planDate);
                 const startedParts = formatHistoryTimeParts(task.updates[0]?.actualStart);
                 const endedParts = formatHistoryTimeParts(task.updates[0]?.actualEnd);
+                const continuationOverview = getContinuationOverview(task);
 
                 return (
                   <TR
@@ -639,6 +640,28 @@ export function HistoryTable({
                           <span className="text-sm font-medium text-[var(--muted-foreground)]">
                             Running from {extractContinuationMeta(task.taskDescription)?.sourceDate}
                           </span>
+                        </div>
+                      ) : null}
+                      {continuationOverview ? (
+                        <div className="grid gap-2 pt-1 sm:grid-cols-3">
+                          <div className="rounded-2xl border border-sky-200/70 bg-white/60 px-3 py-2 text-sm dark:border-sky-300/20 dark:bg-white/5">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-200">This Day</p>
+                            <p className="mt-1 font-bold text-[var(--foreground)]">
+                              {formatMinutesAsHours(continuationOverview.currentTrackedMinutes)}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-emerald-200/70 bg-white/60 px-3 py-2 text-sm dark:border-emerald-300/20 dark:bg-white/5">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-200">Overall</p>
+                            <p className="mt-1 font-bold text-[var(--foreground)]">
+                              {formatMinutesAsHours(continuationOverview.overallTrackedMinutes)}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-violet-200/70 bg-white/60 px-3 py-2 text-sm dark:border-violet-300/20 dark:bg-white/5">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-200">Work Days</p>
+                            <p className="mt-1 font-bold text-[var(--foreground)]">
+                              {continuationOverview.totalDays} day{continuationOverview.totalDays > 1 ? "s" : ""}
+                            </p>
+                          </div>
                         </div>
                       ) : null}
                       <div className="mt-4 grid gap-3 md:grid-cols-2">

@@ -132,7 +132,7 @@ export async function POST(
         data: {
           status: "done",
           completionPercent: latestUpdate.completionPercent > 0 ? latestUpdate.completionPercent : 100,
-          actualEnd: latestUpdate.actualEnd ?? new Date(),
+          actualEnd: latestUpdate.actualEnd,
         },
       });
     } else {
@@ -145,7 +145,7 @@ export async function POST(
           completionPercent: 100,
           trackedMinutes: 0,
           actualStart: null,
-          actualEnd: new Date(),
+          actualEnd: null,
           difficultyLevel: null,
         },
       });
