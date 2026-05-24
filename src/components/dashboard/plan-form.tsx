@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { OTHER_DEPARTMENT_ID } from "@/lib/recurring-task-templates";
-import { CONTINUATION_MARKER, stripContinuationMeta } from "@/lib/task-continuation";
+import { CONTINUATION_MARKER } from "@/lib/task-continuation";
 import { toDateOnly } from "@/lib/utils";
 
 type Department = { id: string; name: string };
@@ -63,9 +63,18 @@ function makeBlankTaskLike(task: Task, fallbackDepartmentId: string, fallbackAss
 }
 
 function stripAutoDescriptionText(description?: string | null) {
-  return stripContinuationMeta(description)
+  const visibleDescription = (() => {
+    if (!description) {
+      return "";
+    }
+
+    const markerIndex = description.indexOf(CONTINUATION_MARKER);
+    return markerIndex === -1 ? description : description.slice(0, markerIndex);
+  })();
+
+  return visibleDescription
     .replace(/^Predicted from your work pattern and completion history\.?\s*/i, "")
-    .trim();
+    .replace(/^\s+/, "");
 }
 
 function mergeDescriptionWithContinuationMeta(originalDescription: string, nextDescription: string) {
@@ -76,7 +85,7 @@ function mergeDescriptionWithContinuationMeta(originalDescription: string, nextD
   }
 
   const continuationMeta = originalDescription.slice(markerIndex).trim();
-  return [nextDescription.trim(), continuationMeta].filter(Boolean).join("\n\n").trim();
+  return [nextDescription, continuationMeta].filter((value) => value.length > 0).join("\n\n");
 }
 
 export function PlanForm({
