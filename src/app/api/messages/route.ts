@@ -7,6 +7,7 @@ import { apiError, apiSuccess } from "@/lib/api";
 import { isMailConfigured, sendWorkspaceEmail } from "@/lib/auth/mail";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db";
+import { getWorkspaceMessages } from "@/lib/worklog";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,16 @@ const ALLOWED_ATTACHMENT_TYPES = new Set([
 ]);
 
 const MAX_ATTACHMENT_SIZE = 8 * 1024 * 1024;
+
+export async function GET() {
+  const user = await requireUser();
+  const { contacts, inbox } = await getWorkspaceMessages(user.id);
+
+  return apiSuccess({
+    contacts: contacts ?? [],
+    inbox: inbox ?? [],
+  });
+}
 
 export async function POST(request: NextRequest) {
   const user = await requireUser();
@@ -57,7 +68,9 @@ export async function POST(request: NextRequest) {
     return apiError("Recipient account was not found.", 404);
   }
 
-  const attachments = formData.getAll("attachments").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  const attachments = formData
+    .getAll("attachments")
+    .filter((entry): entry is File => entry instanceof File && entry.size > 0);
   const attachmentPayload: Array<{
     fileName: string;
     fileUrl: string;
@@ -91,7 +104,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  await db.workspaceMessage.create({
+  const createdMessage = await db.workspaceMessage.create({
     data: {
       senderId: user.id,
       recipientId: parsed.data.recipientId,
@@ -103,6 +116,38 @@ export async function POST(request: NextRequest) {
           }
         : undefined,
     },
+    select: {
+      id: true,
+      subject: true,
+      body: true,
+      readAt: true,
+      createdAt: true,
+      senderId: true,
+      recipientId: true,
+      sender: {
+        select: {
+          name: true,
+          role: true,
+          avatarUrl: true,
+        },
+      },
+      recipient: {
+        select: {
+          name: true,
+          role: true,
+          avatarUrl: true,
+        },
+      },
+      attachments: {
+        select: {
+          id: true,
+          fileName: true,
+          fileUrl: true,
+          fileType: true,
+          fileSize: true,
+        },
+      },
+    },
   });
 
   if (isMailConfigured()) {
@@ -113,7 +158,7 @@ export async function POST(request: NextRequest) {
 
     await sendWorkspaceEmail({
       email: recipient.email,
-      subject: `${safeSubject} · WorkLog`,
+      subject: `${safeSubject} - WorkLog`,
       html: `<div style="font-family:Arial,sans-serif;color:#0f1725;line-height:1.6">
         <h2 style="margin:0 0 12px">You received a new WorkLog message</h2>
         <p style="margin:0 0 12px"><strong>From:</strong> ${user.name}</p>
@@ -129,5 +174,11 @@ export async function POST(request: NextRequest) {
     }).catch(() => null);
   }
 
-  return apiSuccess({ message: attachmentPayload.length ? "Message and files sent successfully." : "Message sent successfully." });
+  return apiSuccess({
+    message: attachmentPayload.length ? "Message and files sent successfully." : "Message sent successfully.",
+    sentMessage: {
+      ...createdMessage,
+      attachments: createdMessage.attachments ?? [],
+    },
+  });
 }

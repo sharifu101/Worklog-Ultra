@@ -1242,6 +1242,7 @@ export async function getWorkspaceMessages(userId: string) {
         id: true,
         name: true,
         role: true,
+        avatarUrl: true,
         department: {
           select: {
             name: true,
@@ -1266,12 +1267,14 @@ export async function getWorkspaceMessages(userId: string) {
           select: {
             name: true,
             role: true,
+            avatarUrl: true,
           },
         },
         recipient: {
           select: {
             name: true,
             role: true,
+            avatarUrl: true,
           },
         },
         attachments: {

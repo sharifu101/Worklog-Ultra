@@ -505,10 +505,10 @@ export function DashboardWorkPlanSection({
                   data-dashboard-row
                   key={task.id}
                 >
-                  <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 lg:max-w-[28%] lg:flex-1">
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto] xl:items-start">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate text-sm font-semibold leading-tight text-[var(--foreground)]">{task.taskTitle}</h3>
+                        <h3 className="break-words text-sm font-semibold leading-6 text-[var(--foreground)]">{task.taskTitle}</h3>
                         {followUpMeta ? (
                           <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
                             Follow-up
@@ -524,12 +524,12 @@ export function DashboardWorkPlanSection({
                     </div>
 
                     {taskDescription ? (
-                      <p className="min-w-0 rounded-lg bg-white/60 px-2 py-1.5 text-xs leading-5 text-slate-600 transition-colors [word-break:break-word] lg:max-w-[32%] lg:flex-1 lg:pr-2">
+                      <p className="min-w-0 rounded-lg bg-white/60 px-2 py-1.5 text-xs leading-5 text-slate-600 transition-colors break-words">
                         {taskDescription}
                       </p>
                     ) : null}
 
-                    <div className="flex flex-wrap items-center gap-1 lg:justify-center">
+                    <div className="flex flex-wrap items-center gap-1 xl:justify-center">
                       <span
                         className={`inline-flex min-w-[72px] items-center justify-center rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${getPriorityTone(task.priority)}`}
                       >
@@ -538,10 +538,10 @@ export function DashboardWorkPlanSection({
                       <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${statusMeta.chip}`}>
                         {statusMeta.label}
                       </span>
-                      <span className="hidden text-xs font-medium text-slate-500 xl:inline">{formatPlannedTime(task)}</span>
+                      <span className="text-xs font-medium text-slate-500">{formatPlannedTime(task)}</span>
                     </div>
 
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-end sm:gap-1">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-end sm:gap-1 xl:min-w-[280px]">
                       <TaskTimerActionWrapper
                         task={task}
                         canEdit={canEdit}
