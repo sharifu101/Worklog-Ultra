@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { AssignmentReviewControls } from "@/components/dashboard/assignment-review-controls";
 import { DashboardTaskTimerAction, type TaskTimerSnapshot } from "@/components/dashboard/dashboard-task-timer-action";
@@ -215,10 +215,10 @@ export function DashboardWorkPlanSection({
 }: DashboardWorkPlanSectionProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const [completeTaskId, setCompleteTaskId] = useState<string | null>(null);
-  const [timerSnapshots, setTimerSnapshots] = useState<Record<string, TaskTimerSnapshot>>({});
   const [savingCompletion, setSavingCompletion] = useState(false);
   const [autoStopQueue, setAutoStopQueue] = useState<TaskAutoStopNotePayload[]>([]);
   const [savingAutoStopNote, setSavingAutoStopNote] = useState(false);
+  const timerSnapshotsRef = useRef<Record<string, TaskTimerSnapshot>>({});
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -281,10 +281,10 @@ export function DashboardWorkPlanSection({
   }, []);
 
   const handleSnapshotChange = useCallback((taskId: string, snapshot: TaskTimerSnapshot) => {
-    setTimerSnapshots((current) => ({
-      ...current,
+    timerSnapshotsRef.current = {
+      ...timerSnapshotsRef.current,
       [taskId]: snapshot,
-    }));
+    };
   }, []);
 
   const handleDoneClick = useCallback((taskId: string) => {
@@ -353,7 +353,7 @@ export function DashboardWorkPlanSection({
       return;
     }
 
-    const snapshot = timerSnapshots[completingTask.id];
+    const snapshot = timerSnapshotsRef.current[completingTask.id];
     setSavingCompletion(true);
 
     const response = await fetch(`/api/dashboard/tasks/${completingTask.id}`, {
@@ -405,7 +405,7 @@ export function DashboardWorkPlanSection({
     }
 
     const currentTask = tasks.find((task) => task.id === activeAutoStopPrompt.taskId) ?? activeAutoStopTask;
-    const snapshot = timerSnapshots[activeAutoStopPrompt.taskId];
+    const snapshot = timerSnapshotsRef.current[activeAutoStopPrompt.taskId];
     const nextStatus = snapshot?.status || currentTask?.updates[0]?.status || "in_progress";
     const nextTrackedMinutes = Math.max(
       0,
@@ -490,7 +490,7 @@ export function DashboardWorkPlanSection({
           <p className="text-sm font-medium text-[var(--muted-foreground)]">{formattedDate}</p>
         </div>
 
-        <div className="space-y-2 p-3 sm:p-4">
+        <div className="space-y-1 p-3 sm:p-4">
           {visibleTasks.length ? (
             visibleTasks.map((task) => {
               const status = task.updates[0]?.status ?? "pending";
@@ -501,14 +501,14 @@ export function DashboardWorkPlanSection({
 
               return (
                 <article
-                  className="group rounded-2xl border border-[#E4EAF5] bg-[#F8FAFF] p-3 transition hover:border-[#d5dff3] hover:shadow-[0_8px_24px_rgba(79,94,247,0.08)] sm:p-3.5"
+                  className="group rounded-[22px] border border-[#E4EAF5] bg-[#F8FAFF] p-3 transition hover:border-[#d5dff3] hover:bg-white hover:shadow-[0_10px_26px_rgba(79,94,247,0.12)]"
                   data-dashboard-row
                   key={task.id}
                 >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 lg:max-w-[28%] lg:flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate text-sm font-semibold text-[var(--foreground)]">{task.taskTitle}</h3>
+                        <h3 className="truncate text-sm font-semibold leading-tight text-[var(--foreground)]">{task.taskTitle}</h3>
                         {followUpMeta ? (
                           <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
                             Follow-up
@@ -520,28 +520,28 @@ export function DashboardWorkPlanSection({
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{task.departmentName}</p>
+                      <p className="mt-1 text-xs text-[var(--muted-foreground)]">{task.departmentName}</p>
                     </div>
 
                     {taskDescription ? (
-                      <p className="min-w-0 text-xs leading-5 text-slate-600 lg:max-w-[26%] lg:flex-1 lg:pr-2">
+                      <p className="min-w-0 rounded-lg bg-white/60 px-2 py-1.5 text-xs leading-5 text-slate-600 transition-colors [word-break:break-word] lg:max-w-[32%] lg:flex-1 lg:pr-2">
                         {taskDescription}
                       </p>
                     ) : null}
 
-                    <div className="flex flex-wrap items-center gap-2 lg:justify-center">
+                    <div className="flex flex-wrap items-center gap-1 lg:justify-center">
                       <span
-                        className={`inline-flex min-w-[72px] items-center justify-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${getPriorityTone(task.priority)}`}
+                        className={`inline-flex min-w-[72px] items-center justify-center rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${getPriorityTone(task.priority)}`}
                       >
                         {formatPriority(task.priority)}
                       </span>
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusMeta.chip}`}>
+                      <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${statusMeta.chip}`}>
                         {statusMeta.label}
                       </span>
                       <span className="hidden text-xs font-medium text-slate-500 xl:inline">{formatPlannedTime(task)}</span>
                     </div>
 
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-2">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-end sm:gap-1">
                       <TaskTimerActionWrapper
                         task={task}
                         canEdit={canEdit}

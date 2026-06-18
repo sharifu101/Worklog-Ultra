@@ -106,22 +106,22 @@ function SidebarContent({
               whileHover={{ x: 4 }}
               whileTap={{ scale: 0.99 }}
             >
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-white/90 transition-colors",
-                active
-                  ? "bg-[linear-gradient(135deg,#5667ff_0%,#4a59ea_100%)] text-white shadow-[0_14px_24px_rgba(86,103,255,0.26)]"
-                  : "hover:bg-white/5",
-              )}
-            >
-              <Icon className="h-5 w-5" />
-              <span>{item.label}</span>
-              {item.href === "/dashboard/assignments" && (user.assignmentNotifications ?? 0) > 0 ? (
-                <span className="ml-auto inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#ff4d6d]" />
-              ) : null}
-            </Link>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "sidebar-force-white flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-white transition-colors",
+                  active
+                    ? "bg-[linear-gradient(135deg,#5667ff_0%,#4a59ea_100%)] text-[#f8fbff] shadow-[0_14px_24px_rgba(86,103,255,0.26)] sidebar-force-white"
+                    : "hover:bg-white/12",
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                <span>{item.label}</span>
+                {item.href === "/dashboard/assignments" && (user.assignmentNotifications ?? 0) > 0 ? (
+                  <span className="ml-auto inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#ff4d6d]" />
+                ) : null}
+              </Link>
             </motion.div>
           );
 
@@ -168,7 +168,7 @@ export function Sidebar({ user }: { user: SidebarUser }) {
   return (
     <motion.aside
       animate={{ opacity: 1, x: 0 }}
-      className="sticky top-0 hidden h-screen w-[250px] shrink-0 bg-[linear-gradient(180deg,#091427_0%,#0d1a2f_100%)] p-4 lg:flex lg:flex-col"
+      className="sticky top-0 hidden h-screen w-[250px] shrink-0 bg-[linear-gradient(160deg,#000080_0%,#001f66_55%,#020b31_100%)] p-4 lg:flex lg:flex-col"
       initial={{ opacity: 0, x: -26 }}
       transition={{ duration: 0.42, ease: "easeOut" }}
     >
@@ -194,7 +194,7 @@ export function MobileSidebar({ user }: { user: SidebarUser }) {
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-[rgba(3,8,18,0.72)] backdrop-blur-sm lg:hidden" />
-        <Dialog.Content className="fixed inset-y-0 left-0 z-50 flex w-[88vw] max-w-[320px] flex-col overflow-y-auto bg-[linear-gradient(180deg,#091427_0%,#0d1a2f_100%)] p-4 shadow-[0_30px_90px_rgba(3,8,18,0.45)] outline-none lg:hidden">
+        <Dialog.Content className="fixed inset-y-0 left-0 z-50 flex w-[88vw] max-w-[320px] flex-col overflow-y-auto bg-[linear-gradient(160deg,#000080_0%,#001f66_55%,#020b31_100%)] p-4 shadow-[0_30px_90px_rgba(3,8,18,0.45)] outline-none lg:hidden">
           <div className="mb-4 flex items-center justify-between">
             <Dialog.Title className="text-sm font-semibold uppercase tracking-[0.24em] text-white">
               WorkLog Ultra

@@ -499,12 +499,12 @@ export function DashboardHeader({
       >
         <ThemeToggle className="hidden h-12 w-12 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] text-[var(--foreground)] shadow-[0_10px_24px_rgba(148,163,184,0.14)] hover:bg-[var(--panel-alt)] md:inline-flex" />
         <div className="hidden items-center gap-2 text-[var(--foreground)] md:flex">
-          <Clock3 className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <Clock3 className="h-4 w-4 text-[var(--muted-foreground)]" />
           <div className="flex items-center gap-2 font-mono tabular-nums">
-            <span className="min-w-[148px] text-[1.55rem] font-extrabold leading-none tracking-[0.08em] text-[var(--foreground)]">
+            <span className="min-w-[168px] text-[2rem] font-extrabold leading-none tracking-[0.08em] text-[var(--foreground)]">
               {currentClock.time}
             </span>
-            <span className="min-w-[28px] text-base font-bold leading-none tracking-[0.08em] text-[#4f5ef7]">
+            <span className="min-w-[32px] text-[1.05rem] font-bold leading-none tracking-[0.08em] text-[#4f5ef7]">
               {currentClock.seconds}
             </span>
             <div className="flex min-w-[146px] items-baseline gap-2">

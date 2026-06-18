@@ -23,12 +23,60 @@
   },
   "dynamicRoutes": [
     {
+      "page": "/api/dashboard/assignments/[id]/review",
+      "regex": "^/api/dashboard/assignments/([^/]+?)/review(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/dashboard/assignments/(?<nxtPid>[^/]+?)/review(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/notices/[id]/dismiss",
+      "regex": "^/api/dashboard/notices/([^/]+?)/dismiss(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/dashboard/notices/(?<nxtPid>[^/]+?)/dismiss(?:/)?$"
+    },
+    {
       "page": "/api/dashboard/report-edit-requests/[id]",
       "regex": "^/api/dashboard/report\\-edit\\-requests/([^/]+?)(?:/)?$",
       "routeKeys": {
         "nxtPid": "nxtPid"
       },
       "namedRegex": "^/api/dashboard/report\\-edit\\-requests/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/tasks/[id]",
+      "regex": "^/api/dashboard/tasks/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/dashboard/tasks/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/users/[id]",
+      "regex": "^/api/dashboard/users/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/dashboard/users/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/users/[id]/compensation",
+      "regex": "^/api/dashboard/users/([^/]+?)/compensation(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/dashboard/users/(?<nxtPid>[^/]+?)/compensation(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/users/[id]/status",
+      "regex": "^/api/dashboard/users/([^/]+?)/status(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/dashboard/users/(?<nxtPid>[^/]+?)/status(?:/)?$"
     }
   ],
   "staticRoutes": [
@@ -141,6 +189,18 @@
       "namedRegex": "^/api/dashboard/analytics/export(?:/)?$"
     },
     {
+      "page": "/api/dashboard/assignment-notifications",
+      "regex": "^/api/dashboard/assignment\\-notifications(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/assignment\\-notifications(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/assignments",
+      "regex": "^/api/dashboard/assignments(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/assignments(?:/)?$"
+    },
+    {
       "page": "/api/dashboard/attendance",
       "regex": "^/api/dashboard/attendance(?:/)?$",
       "routeKeys": {},
@@ -153,10 +213,22 @@
       "namedRegex": "^/api/dashboard/departments(?:/)?$"
     },
     {
+      "page": "/api/dashboard/notices",
+      "regex": "^/api/dashboard/notices(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/notices(?:/)?$"
+    },
+    {
       "page": "/api/dashboard/plan",
       "regex": "^/api/dashboard/plan(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/dashboard/plan(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/reminders/self",
+      "regex": "^/api/dashboard/reminders/self(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/reminders/self(?:/)?$"
     },
     {
       "page": "/api/dashboard/report",
@@ -169,6 +241,18 @@
       "regex": "^/api/dashboard/report\\-edit\\-requests(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/dashboard/report\\-edit\\-requests(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/request-notifications",
+      "regex": "^/api/dashboard/request\\-notifications(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/request\\-notifications(?:/)?$"
+    },
+    {
+      "page": "/api/dashboard/users",
+      "regex": "^/api/dashboard/users(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/dashboard/users(?:/)?$"
     },
     {
       "page": "/api/messages",
@@ -213,6 +297,12 @@
       "namedRegex": "^/dashboard(?:/)?$"
     },
     {
+      "page": "/dashboard/assignments",
+      "regex": "^/dashboard/assignments(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/assignments(?:/)?$"
+    },
+    {
       "page": "/dashboard/attendance",
       "regex": "^/dashboard/attendance(?:/)?$",
       "routeKeys": {},
@@ -243,10 +333,22 @@
       "namedRegex": "^/dashboard/messages(?:/)?$"
     },
     {
+      "page": "/dashboard/notices",
+      "regex": "^/dashboard/notices(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/notices(?:/)?$"
+    },
+    {
       "page": "/dashboard/plan",
       "regex": "^/dashboard/plan(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/dashboard/plan(?:/)?$"
+    },
+    {
+      "page": "/dashboard/recurring",
+      "regex": "^/dashboard/recurring(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/recurring(?:/)?$"
     },
     {
       "page": "/dashboard/report",

@@ -452,14 +452,16 @@ export function DashboardTaskTimerAction({
   }, [actualStart, liveTrackedSeconds, now, reportDate, runningStartedAt, saving, trackedSecondsBase]);
 
   const buttonClass = compact
-    ? "button-force-white !text-white [&_svg]:!text-white h-7 min-w-[68px] justify-center rounded-full px-2.5 text-[11px] font-semibold"
-    : "button-force-white !text-white [&_svg]:!text-white h-8 min-w-[84px] justify-center rounded-full px-3 text-xs font-semibold";
+    ? "button-force-white !text-white [&_svg]:!text-white h-8 min-w-[84px] justify-center rounded-full px-3 text-xs font-semibold tracking-[0.01em] transition-all duration-200 hover:scale-[1.02] active:scale-95 disabled:scale-100"
+    : "button-force-white !text-white [&_svg]:!text-white h-9 min-w-[92px] justify-center rounded-full px-3.5 text-sm font-semibold tracking-[0.01em] transition-all duration-200 hover:scale-[1.02] active:scale-95 disabled:scale-100";
+  const startButtonClass = `${buttonClass} border border-white/20 bg-gradient-to-r from-[#06b6d4] via-[#14b8a6] to-[#22c55e] shadow-[0_12px_30px_rgba(6,182,212,0.34)] hover:from-[#0ea5e9] hover:via-[#06b6d4] hover:to-[#10b981] hover:shadow-[0_16px_34px_rgba(8,145,178,0.42)]`;
+  const doneButtonClass = `${buttonClass} border border-white/20 bg-gradient-to-r from-[#7c3aed] via-[#8b5cf6] to-[#ec4899] shadow-[0_12px_30px_rgba(168,85,247,0.3)] hover:from-[#6d28d9] hover:via-[#7c3aed] hover:to-[#db2777] hover:shadow-[0_16px_34px_rgba(168,85,247,0.42)] disabled:from-[#94a3b8] disabled:to-[#94a3b8] disabled:shadow-none`;
 
   return (
     <div className={compact ? "flex min-w-0 flex-col gap-1.5" : "flex min-w-[170px] flex-col gap-2"}>
       <div className="flex flex-wrap items-center gap-1.5">
         <Button
-          className={`${buttonClass} bg-[#19a46b] hover:bg-[#14885a]`}
+          className={startButtonClass}
           disabled={!canStart}
           onClick={startTimer}
           type="button"
@@ -470,7 +472,7 @@ export function DashboardTaskTimerAction({
         </Button>
         {isCompleted ? null : (
           <Button
-            className={`${buttonClass} bg-[#4f5ef7] hover:bg-[#4453eb] disabled:bg-indigo-300 disabled:text-white disabled:opacity-100`}
+            className={doneButtonClass}
             disabled={!canDone}
             onClick={handleDoneClick}
             type="button"
@@ -481,7 +483,7 @@ export function DashboardTaskTimerAction({
         )}
         {afterDoneSlot}
         <span
-          className={`inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 font-semibold text-slate-600 ${
+          className={`inline-flex min-w-[110px] items-center justify-center gap-1 rounded-full border border-slate-200 bg-white/80 font-semibold tabular-nums text-slate-600 ${
             compact ? "px-2 py-1 text-[10px]" : "px-3 py-1.5 text-xs"
           }`}
         >

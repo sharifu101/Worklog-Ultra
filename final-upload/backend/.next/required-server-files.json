@@ -11,7 +11,7 @@
     "cleanDistDir": true,
     "assetPrefix": "",
     "cacheMaxMemorySize": 52428800,
-    "configOrigin": "next.config.ts",
+    "configOrigin": "next.config.js",
     "useFileSystemPublicRoutes": true,
     "generateEtags": true,
     "pageExtensions": [
@@ -105,7 +105,7 @@
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "C:\\Users\\shari\\Desktop\\Worklog-Ultra",
+    "outputFileTracingRoot": "D:\\Worklog-Ultra",
     "cacheComponents": false,
     "cacheLife": {
       "default": {
@@ -303,14 +303,14 @@
     },
     "htmlLimitedBots": "[\\w-]+-Google|Google-[\\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight",
     "bundlePagesRouterDependencies": false,
-    "configFileName": "next.config.ts",
+    "configFileName": "next.config.js",
     "turbopack": {
-      "root": "C:\\Users\\shari\\Desktop\\Worklog-Ultra"
+      "root": "D:\\Worklog-Ultra"
     },
     "distDirRoot": ".next"
   },
-  "appDir": "C:\\Users\\shari\\Desktop\\Worklog-Ultra",
-  "relativeAppDir": "",
+  "appDir": "D:\\Worklog-Ultra\\build-package-temp\\portable-source-upload",
+  "relativeAppDir": "build-package-temp\\portable-source-upload",
   "files": [
     ".next\\routes-manifest.json",
     ".next\\server\\pages-manifest.json",

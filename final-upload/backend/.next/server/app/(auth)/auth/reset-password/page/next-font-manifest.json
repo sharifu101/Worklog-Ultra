@@ -1,7 +1,7 @@
 {
   "pages": {},
   "app": {
-    "[project]/src/app/(auth)/auth/reset-password/page": [
+    "[project]/build-package-temp/portable-source-upload/src/app/(auth)/auth/reset-password/page": [
       "static/media/a343f882a40d2cc9-s.p.0kho-wj7-y-w1.woff2"
     ]
   },

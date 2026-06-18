@@ -53,6 +53,10 @@ export function TaskManageControls({
   const [markingDone, setMarkingDone] = useState(false);
   const isRecurringTask = isRecurringTaskDescription(task.taskDescription);
   const isAlreadyMovedToHistory = isMovedToHistory(task.taskDescription);
+  const editButtonClass =
+    "button-force-white h-8 rounded-full border border-white/20 px-3 text-xs font-semibold tracking-[0.01em] bg-gradient-to-r from-[#4f46e5] via-[#8b5cf6] to-[#ec4899] shadow-[0_10px_24px_rgba(99,102,241,0.32)] transition-all duration-200 hover:scale-[1.02] hover:from-[#4338ca] hover:via-[#7c3aed] hover:to-[#db2777] active:scale-95";
+  const markDoneButtonClass =
+    "button-force-white h-8 rounded-full border border-white/20 px-3 text-xs font-semibold tracking-[0.01em] bg-gradient-to-r from-[#06b6d4] via-[#3b82f6] to-[#8b5cf6] shadow-[0_10px_24px_rgba(59,130,246,0.3)] hover:scale-[1.02] hover:from-[#0891b2] hover:via-[#2563eb] hover:to-[#7c3aed] transition-all duration-200 disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:hover:scale-100";
 
   function toEditableDescription(value?: string | null) {
     return stripHistoryMeta(stripRecurringTaskMeta(value)).replace(AUTO_PREDICTION_TEXT, "").trim();
@@ -149,7 +153,7 @@ export function TaskManageControls({
         open={editOpen}
       >
         <Dialog.Trigger asChild>
-          <Button className="h-8 rounded-full px-3 text-xs" size="sm" variant="outline">
+          <Button className={editButtonClass} size="sm" type="button" variant="default">
             <Pencil className="h-3.5 w-3.5" />
             Edit
           </Button>
@@ -272,10 +276,11 @@ export function TaskManageControls({
         <Dialog.Root onOpenChange={setDoneOpen} open={doneOpen}>
           <Dialog.Trigger asChild>
             <Button
-              className="h-8 rounded-full px-3 text-xs text-emerald-700 hover:bg-emerald-50 disabled:text-emerald-300"
+              className={markDoneButtonClass}
               disabled={isAlreadyMovedToHistory}
               size="sm"
-              variant="outline"
+              variant="default"
+              type="button"
             >
               <CheckSquare className="h-3.5 w-3.5" />
               {isAlreadyMovedToHistory ? "Done" : "Mark Done"}
