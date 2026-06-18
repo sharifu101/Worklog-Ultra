@@ -7,6 +7,19 @@ import { formatMinutes, toDateOnly } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+function normalizeDateParam(value?: string | string[]) {
+  if (Array.isArray(value)) {
+    return normalizeDateParam(value[0]);
+  }
+
+  if (!value) {
+    return null;
+  }
+
+  const normalized = toDateOnly(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : null;
+}
+
 function formatRangeDate(value: string) {
   return new Intl.DateTimeFormat("en-BD", {
     timeZone: "Asia/Dhaka",
@@ -45,16 +58,25 @@ function statusLabel(status: "done" | "in_progress" | "pending") {
 export default async function ReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; from?: string; to?: string; taskId?: string }>;
+  searchParams: Promise<{
+    date?: string | string[];
+    from?: string | string[];
+    to?: string | string[];
+    taskId?: string | string[];
+  }>;
 }) {
   const user = await requireEmployee();
   const { date, from, to, taskId } = await searchParams;
-  const selectedDate = date ? toDateOnly(date) : toDateOnly();
+
+  const selectedDate = normalizeDateParam(date) ?? toDateOnly();
+  const requestedFrom = normalizeDateParam(from) ?? selectedDate;
+  const requestedTo = normalizeDateParam(to) ?? selectedDate;
   const exactDateView = Boolean(taskId) || (!from && !to);
-  const requestedFrom = exactDateView ? selectedDate : from ?? selectedDate;
-  const requestedTo = exactDateView ? selectedDate : to ?? selectedDate;
-  const rangeFrom = requestedFrom <= requestedTo ? requestedFrom : requestedTo;
-  const rangeTo = requestedFrom <= requestedTo ? requestedTo : requestedFrom;
+  const focusedFrom = exactDateView ? selectedDate : requestedFrom;
+  const focusedTo = exactDateView ? selectedDate : requestedTo;
+
+  const rangeFrom = focusedFrom <= focusedTo ? focusedFrom : focusedTo;
+  const rangeTo = focusedFrom <= focusedTo ? focusedTo : focusedFrom;
   const historyTasks = await getHistoryData(user.id, rangeFrom, rangeTo);
   const summary = buildReportSummary(historyTasks);
   const downloadHref = `/api/dashboard/report/export?from=${encodeURIComponent(rangeFrom)}&to=${encodeURIComponent(rangeTo)}`;
