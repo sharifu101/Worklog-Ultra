@@ -86,11 +86,20 @@ html[data-theme="dark"] body {
 }
 
 a,
-button,
 input,
+button,
 select,
 textarea {
   outline: none;
+}
+
+a,
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+[role="button"] {
+  cursor: pointer;
 }
 
 ::selection {

@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { roleUiTitle } from "@/lib/auth/roles";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -29,9 +30,19 @@ type SidebarUser = {
   role: "employee" | "hr" | "manager" | "admin";
   designation: string | null;
   avatar_url?: string | null;
+  avatarUrl?: string | null;
   extraAccess?: string[];
   assignmentNotifications?: number;
 };
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
 function SidebarContent({
   user,
@@ -43,6 +54,7 @@ function SidebarContent({
   mobile?: boolean;
 }) {
   const router = useRouter();
+  const resolvedAvatarUrl = user.avatarUrl || user.avatar_url || "";
 
   async function logout() {
     const response = await fetch("/api/auth/logout", { method: "POST" });
@@ -125,7 +137,16 @@ function SidebarContent({
         })}
       </motion.nav>
       <div className={cn("mt-auto", mobile && "mb-6")}>
-        <p className="px-3 pb-2 text-sm font-medium text-white/70">{user.designation ?? roleUiTitle(user.role)}</p>
+        <div className="mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-white/80">
+          <Avatar className="h-10 w-10 border border-white/15">
+            {resolvedAvatarUrl ? <AvatarImage alt={user.name} src={resolvedAvatarUrl} /> : null}
+            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">{user.name}</p>
+            <p className="truncate text-xs text-white/70">{user.designation ?? roleUiTitle(user.role)}</p>
+          </div>
+        </div>
         <button
           className="sidebar-force-white flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition hover:bg-white/10"
           onClick={logout}

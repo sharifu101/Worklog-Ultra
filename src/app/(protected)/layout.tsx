@@ -39,6 +39,7 @@ export default async function ProtectedLayout({
             role: user.role,
             designation: user.designation,
             avatar_url: user.avatarUrl,
+            avatarUrl: user.avatarUrl,
             extraAccess: user.extraAccess,
             assignmentNotifications: incomingAssignmentNotifications,
           }}
@@ -51,6 +52,7 @@ export default async function ProtectedLayout({
               roleTitle: roleUiTitle(user.role),
               designation: user.designation,
               avatar_url: user.avatarUrl,
+              avatarUrl: user.avatarUrl,
               unreadMessages,
               requestNotifications,
               assignmentNotifications,

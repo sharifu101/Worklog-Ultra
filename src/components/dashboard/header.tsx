@@ -47,6 +47,10 @@ type RequestNotificationItem = {
   reviewerName?: string;
 };
 
+function getUserAvatarUrl(user: { avatarUrl?: string | null; avatar_url?: string | null }) {
+  return user.avatarUrl || user.avatar_url || "";
+}
+
 type NotificationDetail =
   | {
       kind: "notice";
@@ -100,6 +104,7 @@ export function DashboardHeader({
     roleTitle: string;
     designation: string | null;
     avatar_url?: string | null;
+    avatarUrl?: string | null;
     unreadMessages: number;
     requestNotifications: number;
     assignmentNotifications: number;
@@ -134,6 +139,7 @@ export function DashboardHeader({
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetail | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const bellRef = useRef<HTMLDivElement | null>(null);
+  const resolvedAvatarUrl = getUserAvatarUrl(user);
   const clockRef = useRef({
     time: "",
     seconds: "",
@@ -481,7 +487,7 @@ export function DashboardHeader({
           name: user.name,
           role: user.role,
           designation: user.designation,
-          avatar_url: user.avatar_url,
+          avatarUrl: user.avatarUrl ?? user.avatar_url,
         }}
       />
       <div className="flex-1" />
@@ -660,7 +666,7 @@ export function DashboardHeader({
             type="button"
           >
             <Avatar>
-              {user.avatar_url ? <AvatarImage alt={user.name} src={user.avatar_url} /> : null}
+              {resolvedAvatarUrl ? <AvatarImage alt={user.name} src={resolvedAvatarUrl} /> : null}
               <AvatarFallback>{user.name.slice(0, 1)}</AvatarFallback>
             </Avatar>
             <div className="hidden text-left sm:block">

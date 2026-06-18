@@ -25,6 +25,7 @@ export function ProfileSettingsForm({
     phone: string | null;
     location: string | null;
     avatar_url: string | null;
+    avatarUrl?: string | null;
     monthlySalary: number | null;
     expectedDailyHours: number | null;
     departmentId: string | null;
@@ -35,7 +36,7 @@ export function ProfileSettingsForm({
   const [loading, setLoading] = useState(false);
   const [departmentId, setDepartmentId] = useState(user.departmentId ?? "__none__");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? user.avatar_url ?? "");
   const avatarPreview = useMemo(() => (avatarFile ? URL.createObjectURL(avatarFile) : avatarUrl), [avatarFile, avatarUrl]);
 
   useEffect(() => {
@@ -68,8 +69,9 @@ export function ProfileSettingsForm({
         return;
       }
 
-      nextAvatarUrl = uploadResult.avatar_url;
-      setAvatarUrl(uploadResult.user?.avatar_url ?? uploadResult.avatar_url);
+      const uploadedAvatarUrl = uploadResult.avatarUrl ?? uploadResult.avatar_url ?? "";
+      nextAvatarUrl = uploadedAvatarUrl;
+      setAvatarUrl(uploadedAvatarUrl);
       setAvatarFile(null);
     }
 
@@ -99,7 +101,7 @@ export function ProfileSettingsForm({
       return;
     }
 
-    setAvatarUrl(result.user?.avatar_url ?? nextAvatarUrl);
+    setAvatarUrl(result?.user?.avatarUrl ?? result?.user?.avatar_url ?? nextAvatarUrl);
     setAvatarFile(null);
     toast.success(result.message);
     router.refresh();
