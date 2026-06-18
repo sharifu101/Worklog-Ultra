@@ -16,18 +16,25 @@ import {
 } from "@/lib/recurring-task-templates";
 import { Button } from "@/components/ui/button";
 import { RecurringTasksCenter } from "@/components/dashboard/recurring-tasks-center";
+import {
+  DASHBOARD_TASKS_CREATED_EVENT,
+  dispatchDashboardTasksCreated,
+  scheduleDashboardTaskAutostart,
+} from "@/lib/dashboard-live-events";
 
 type Department = { id: string; name: string };
 
 export function DashboardRecurringQuickAdd({
   currentUserId,
   currentUserDepartmentId,
+  isTenderDepartment = false,
   existingTaskTitles,
   departments,
   allowOtherDepartment,
 }: {
   currentUserId: string;
   currentUserDepartmentId?: string | null;
+  isTenderDepartment?: boolean;
   existingTaskTitles: string[];
   departments: Department[];
   allowOtherDepartment?: boolean;
@@ -37,6 +44,7 @@ export function DashboardRecurringQuickAdd({
   const [page, setPage] = useState(0);
   const [addingTemplateId, setAddingTemplateId] = useState<string | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
+  const [addedTaskTitles, setAddedTaskTitles] = useState<string[]>(existingTaskTitles);
   const pageSize = 4;
   const loadTemplates = useMemo(
     () => () => {
@@ -72,10 +80,32 @@ export function DashboardRecurringQuickAdd({
     }
   }, [loadTemplates, manageOpen]);
 
+  useEffect(() => {
+    setAddedTaskTitles(existingTaskTitles);
+  }, [existingTaskTitles]);
+
+  useEffect(() => {
+    function handleTasksCreated(event: Event) {
+      const detail = (event as CustomEvent<{ tasks?: Array<{ taskTitle: string }> }>).detail;
+      const createdTasks = detail?.tasks ?? [];
+      if (!createdTasks.length) {
+        return;
+      }
+
+      setAddedTaskTitles((current) => [
+        ...current,
+        ...createdTasks.map((task) => task.taskTitle),
+      ]);
+    }
+
+    window.addEventListener(DASHBOARD_TASKS_CREATED_EVENT, handleTasksCreated);
+    return () => window.removeEventListener(DASHBOARD_TASKS_CREATED_EVENT, handleTasksCreated);
+  }, []);
+
   const totalPages = Math.max(1, Math.ceil(templates.length / pageSize));
   const existingTaskTitleSet = useMemo(
-    () => new Set(existingTaskTitles.map((title) => title.trim().toLowerCase()).filter(Boolean)),
-    [existingTaskTitles],
+    () => new Set(addedTaskTitles.map((title) => title.trim().toLowerCase()).filter(Boolean)),
+    [addedTaskTitles],
   );
   const visibleTemplates = useMemo(
     () => templates.slice(page * pageSize, page * pageSize + pageSize),
@@ -120,6 +150,34 @@ export function DashboardRecurringQuickAdd({
     }
 
     toast.success(`${template.taskTitle} added to today's work plan.`);
+    const createdOwnTask = ((result.tasks ?? []) as Array<{ id: string; userId: string; planDate: string }>)
+      .find((task) => task.userId === currentUserId);
+    if (isTenderDepartment && createdOwnTask) {
+      scheduleDashboardTaskAutostart(createdOwnTask.id, createdOwnTask.planDate);
+    }
+    dispatchDashboardTasksCreated(
+      ((result.tasks ?? []) as Array<{
+        id: string;
+        userId: string;
+        taskTitle: string;
+        taskDescription?: string | null;
+        priority: string;
+        planDate: string;
+        assignedBy?: string | null;
+        department?: { name?: string | null } | null;
+      }>)
+        .filter((task) => task.userId === currentUserId && !task.assignedBy)
+        .map((task) => ({
+          id: task.id,
+          taskTitle: task.taskTitle,
+          taskDescription: task.taskDescription ?? "",
+          priority: task.priority,
+          planDate: task.planDate,
+          userId: task.userId,
+          assignedBy: task.assignedBy ?? null,
+          departmentName: task.department?.name ?? "General",
+        })),
+    );
     router.refresh();
   }
 

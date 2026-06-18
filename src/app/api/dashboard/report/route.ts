@@ -161,18 +161,8 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const shouldAutoContinue = (update: (typeof parsed.data.updates)[number]) =>
-    update.status !== "done" &&
-    update.completionPercent < 100 &&
-    Boolean(
-      update.actualStart ||
-        update.actualEnd ||
-        update.trackedMinutes > 0 ||
-        update.completionPercent > 0 ||
-        update.note?.trim(),
-    );
   const carryForwardUpdates = parsed.data.updates.filter(
-    (update) => (update.carryForward || shouldAutoContinue(update)) && update.status !== "done" && update.completionPercent < 100,
+    (update) => update.carryForward && update.status !== "done" && update.completionPercent < 100,
   );
 
   if (carryForwardUpdates.length) {
@@ -230,7 +220,7 @@ export async function POST(request: NextRequest) {
 
   return apiSuccess({
     message: carryForwardUpdates.length
-      ? "Evening report submitted and continuation task moved to tomorrow."
-      : "Evening report submitted successfully.",
+      ? "Report submitted and continuation task moved to tomorrow."
+      : "Report submitted successfully.",
   });
 }

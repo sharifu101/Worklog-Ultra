@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 type ThemeMode = "dark" | "light";
 
 function getThemeFromDom(): ThemeMode {
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
 export function ThemeToggle({ className }: { className?: string }) {
-  const [theme, setTheme] = useState<ThemeMode>("dark");
+  const [theme, setTheme] = useState<ThemeMode>("light");
 
   useEffect(() => {
     const syncTheme = () => setTheme(getThemeFromDom());

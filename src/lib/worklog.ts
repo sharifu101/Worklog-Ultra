@@ -575,7 +575,9 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
           orderBy: { createdAt: "desc" },
           take: 1,
         },
-        updates: true,
+        updates: {
+          orderBy: [{ reportDate: "desc" }, { updatedAt: "desc" }],
+        },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -723,7 +725,9 @@ export async function getPlanWithReports(
       planDate: new Date(day),
     },
     include: {
-      updates: true,
+      updates: {
+        orderBy: [{ reportDate: "desc" }, { updatedAt: "desc" }],
+      },
       department: true,
       editRequests: {
         where: {
@@ -877,7 +881,9 @@ export async function getHistoryData(userId: string, from?: string, to?: string)
       },
       include: {
         department: true,
-        updates: true,
+        updates: {
+          orderBy: [{ reportDate: "desc" }, { updatedAt: "desc" }],
+        },
       },
       orderBy: [{ planDate: "desc" }, { createdAt: "desc" }],
     }),
@@ -1311,6 +1317,13 @@ export async function getWorkspaceDirectoryData(viewer: {
     },
     include: {
       department: true,
+      attendanceRecords: {
+        where: {
+          attendanceDate: new Date(today),
+        },
+        orderBy: { attendanceDate: "desc" },
+        take: 1,
+      },
       taskOwner: {
         where: {
           planDate: new Date(today),
@@ -1367,6 +1380,16 @@ export async function getWorkspaceDirectoryData(viewer: {
         taskCount: todaysPlans.length,
         completedTaskCount: todaysPlans.filter((task) => task.status === "done").length,
         totalTrackedMinutes: todaysPlans.reduce((sum, task) => sum + task.trackedMinutes, 0),
+        attendance: user.attendanceRecords[0]
+          ? {
+              status: user.attendanceRecords[0].status,
+              checkInAt: user.attendanceRecords[0].checkInAt,
+              checkOutAt: user.attendanceRecords[0].checkOutAt,
+              breakMinutes: user.attendanceRecords[0].breakMinutes,
+              workingMinutes: user.attendanceRecords[0].workingMinutes,
+              note: user.attendanceRecords[0].note,
+            }
+          : null,
         todaysPlans,
       };
     }),

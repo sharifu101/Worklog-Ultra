@@ -3,7 +3,7 @@
 import { CheckCircle2, BellRing, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { extractFollowUpMeta, isFollowUpDueNow } from "@/lib/task-follow-up";
 
 type NotifierTask = {
   id: string;
@@ -11,12 +11,14 @@ type NotifierTask = {
   status: "done" | "in_progress" | "pending";
   trackedMinutes: number;
   actualEnd?: string | null;
+  taskDescription?: string | null;
 };
 
 type PopupState =
   | { kind: "completed"; task: NotifierTask }
   | { kind: "pending"; task: NotifierTask }
-  | { kind: "morning-pending"; tasks: NotifierTask[] };
+  | { kind: "morning-pending"; tasks: NotifierTask[] }
+  | { kind: "follow-up"; task: NotifierTask; reminderNote: string };
 
 function getDhakaHour() {
   const parts = new Intl.DateTimeFormat("en-BD", {
@@ -48,6 +50,8 @@ export function DashboardTaskNotifier({ tasks = [] }: { tasks: NotifierTask[] })
         window.sessionStorage.removeItem(`task-popup-completed-event:${todayKey}`);
       } else if (nextPopup.kind === "morning-pending") {
         window.localStorage.setItem(`task-popup-morning-pending:${todayKey}`, "seen");
+      } else if (nextPopup.kind === "follow-up") {
+        window.localStorage.setItem(`task-popup-follow-up:${todayKey}:${nextPopup.task.id}`, "seen");
       } else {
         window.localStorage.setItem(`task-popup-pending-snooze:${todayKey}`, String(Date.now() + 15 * 60 * 1000));
       }
@@ -73,52 +77,94 @@ export function DashboardTaskNotifier({ tasks = [] }: { tasks: NotifierTask[] })
       return;
     }
 
-    const completionEventRaw = window.sessionStorage.getItem(`task-popup-completed-event:${todayKey}`);
-    let completedTask: NotifierTask | undefined;
+    function evaluatePopups() {
+      const completionEventRaw = window.sessionStorage.getItem(`task-popup-completed-event:${todayKey}`);
+      let completedTask: NotifierTask | undefined;
 
-    if (completionEventRaw) {
-      try {
-        const parsed = JSON.parse(completionEventRaw) as { taskId?: string; timestamp?: number };
-        const isFresh = typeof parsed.timestamp === "number" && Date.now() - parsed.timestamp <= 3000;
+      if (completionEventRaw) {
+        try {
+          const parsed = JSON.parse(completionEventRaw) as {
+            taskId?: string;
+            taskTitle?: string;
+            timestamp?: number;
+            trackedMinutes?: number;
+          };
+          const isFresh = typeof parsed.timestamp === "number" && Date.now() - parsed.timestamp <= 5000;
 
-        if (parsed.taskId && isFresh) {
-          completedTask = tasks.find(
-            (task) =>
-              task.id === parsed.taskId &&
-              task.status === "done" &&
-              Boolean(task.actualEnd) &&
-              window.localStorage.getItem(`task-popup-completed:${todayKey}:${task.id}`) !== "seen",
-          );
-        }
+          if (parsed.taskId && isFresh) {
+            const matchedTask = tasks.find((task) => task.id === parsed.taskId);
+            const alreadySeen =
+              window.localStorage.getItem(`task-popup-completed:${todayKey}:${parsed.taskId}`) === "seen";
 
-        if (!isFresh || !completedTask) {
+            if (!alreadySeen) {
+              completedTask = matchedTask
+                ? { ...matchedTask, status: "done" as const }
+                : {
+                    id: parsed.taskId,
+                    title: parsed.taskTitle ?? "Task",
+                    status: "done" as const,
+                    trackedMinutes: parsed.trackedMinutes ?? 1,
+                    actualEnd: new Date().toISOString(),
+                  };
+            }
+          }
+
+          if (!isFresh || !completedTask) {
+            window.sessionStorage.removeItem(`task-popup-completed-event:${todayKey}`);
+          }
+        } catch {
           window.sessionStorage.removeItem(`task-popup-completed-event:${todayKey}`);
         }
-      } catch {
-        window.sessionStorage.removeItem(`task-popup-completed-event:${todayKey}`);
+      }
+
+      if (completedTask) {
+        setPopup({ kind: "completed", task: completedTask });
+        return;
+      }
+
+      const followUpTask = tasks.find((task) => {
+        if (task.status === "done") {
+          return false;
+        }
+
+        const followUpMeta = extractFollowUpMeta(task.taskDescription);
+        if (!followUpMeta || !isFollowUpDueNow(followUpMeta)) {
+          return false;
+        }
+
+        return window.localStorage.getItem(`task-popup-follow-up:${todayKey}:${task.id}`) !== "seen";
+      });
+
+      if (followUpTask) {
+        const followUpMeta = extractFollowUpMeta(followUpTask.taskDescription);
+        setPopup({
+          kind: "follow-up",
+          task: followUpTask,
+          reminderNote: followUpMeta?.reminderNote ?? "",
+        });
+        return;
+      }
+
+      const pendingTasks = tasks.filter((task) => task.status !== "done");
+      const morningPendingSeen = window.localStorage.getItem(`task-popup-morning-pending:${todayKey}`) === "seen";
+
+      if (pendingTasks.length && getDhakaHour() < 12 && !morningPendingSeen) {
+        setPopup({ kind: "morning-pending", tasks: pendingTasks.slice(0, 5) });
+        return;
+      }
+
+      const pendingTask = tasks.find((task) => task.status !== "done");
+      const snoozeUntil = Number(window.localStorage.getItem(`task-popup-pending-snooze:${todayKey}`) ?? "0");
+
+      if (pendingTask && getDhakaHour() >= 19 && Date.now() > snoozeUntil) {
+        setPopup({ kind: "pending", task: pendingTask });
+        fetch("/api/dashboard/reminders/self", { method: "POST" }).catch(() => null);
       }
     }
 
-    if (completedTask) {
-      setPopup({ kind: "completed", task: completedTask });
-      return;
-    }
-
-    const pendingTasks = tasks.filter((task) => task.status !== "done");
-    const morningPendingSeen = window.localStorage.getItem(`task-popup-morning-pending:${todayKey}`) === "seen";
-
-    if (pendingTasks.length && getDhakaHour() < 12 && !morningPendingSeen) {
-      setPopup({ kind: "morning-pending", tasks: pendingTasks.slice(0, 5) });
-      return;
-    }
-
-    const pendingTask = tasks.find((task) => task.status !== "done");
-    const snoozeUntil = Number(window.localStorage.getItem(`task-popup-pending-snooze:${todayKey}`) ?? "0");
-
-    if (pendingTask && getDhakaHour() >= 19 && Date.now() > snoozeUntil) {
-      setPopup({ kind: "pending", task: pendingTask });
-      fetch("/api/dashboard/reminders/self", { method: "POST" }).catch(() => null);
-    }
+    evaluatePopups();
+    const interval = window.setInterval(evaluatePopups, 60_000);
+    return () => window.clearInterval(interval);
   }, [tasks, todayKey]);
 
   if (!popup) {
@@ -144,6 +190,8 @@ export function DashboardTaskNotifier({ tasks = [] }: { tasks: NotifierTask[] })
                 ? "bg-emerald-100 text-emerald-600"
                 : popup.kind === "morning-pending"
                   ? "bg-[#eef2ff] text-[#4f5ef7]"
+                  : popup.kind === "follow-up"
+                    ? "bg-violet-100 text-violet-600"
                   : "bg-amber-100 text-amber-600"
             }`}
           >
@@ -159,6 +207,8 @@ export function DashboardTaskNotifier({ tasks = [] }: { tasks: NotifierTask[] })
                 ? "text-emerald-700"
                 : popup.kind === "morning-pending"
                   ? "text-[#3148d8]"
+                  : popup.kind === "follow-up"
+                    ? "text-violet-700"
                   : "text-amber-700"
             }`}
           >
@@ -166,6 +216,8 @@ export function DashboardTaskNotifier({ tasks = [] }: { tasks: NotifierTask[] })
               ? "Great! Task Completed"
               : popup.kind === "morning-pending"
                 ? "Good Morning Reminder"
+                : popup.kind === "follow-up"
+                  ? "Follow-up Reminder"
                 : "Task Pending Reminder"}
           </h3>
           {popup.kind === "morning-pending" ? (
@@ -194,6 +246,17 @@ export function DashboardTaskNotifier({ tasks = [] }: { tasks: NotifierTask[] })
               </div>
               <p className="mt-4 text-base font-semibold text-slate-700">You have {popup.tasks.length} task{popup.tasks.length > 1 ? "s" : ""} to remember today.</p>
             </>
+          ) : popup.kind === "follow-up" ? (
+            <>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                <span className="font-semibold">{popup.task.title}</span> is scheduled for follow-up now.
+              </p>
+              {popup.reminderNote ? (
+                <p className="mt-4 rounded-2xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+                  {popup.reminderNote}
+                </p>
+              ) : null}
+            </>
           ) : (
             <>
               <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -217,21 +280,23 @@ export function DashboardTaskNotifier({ tasks = [] }: { tasks: NotifierTask[] })
                 ? "bg-[#315fe6] hover:bg-[#274fc0]"
                 : popup.kind === "morning-pending"
                   ? "bg-[#4f5ef7] hover:bg-[#4453eb]"
+                  : popup.kind === "follow-up"
+                    ? "bg-violet-600 hover:bg-violet-700"
                   : "bg-amber-500 hover:bg-amber-600"
             }`}
-            href={popup.kind === "morning-pending" ? "/dashboard" : "/dashboard/report"}
+            href={popup.kind === "morning-pending" ? "/dashboard" : "/dashboard"}
             onClick={() => {
               dismissPopup(popup);
             }}
           >
-            {popup.kind === "completed" ? "View Task" : popup.kind === "morning-pending" ? "Keep It In Mind" : "Go to Task"}
+            {popup.kind === "completed" ? "View Task" : popup.kind === "morning-pending" ? "Keep It In Mind" : popup.kind === "follow-up" ? "Open Task" : "Go to Task"}
           </Link>
           <button
             className="w-full text-center text-sm font-semibold text-slate-500 transition hover:text-slate-700"
             onClick={() => dismissPopup(popup)}
             type="button"
           >
-            {popup.kind === "completed" ? "Close" : popup.kind === "morning-pending" ? "Close Reminder" : "Snooze 15 min"}
+            {popup.kind === "completed" ? "Close" : popup.kind === "morning-pending" ? "Close Reminder" : popup.kind === "follow-up" ? "Dismiss" : "Snooze 15 min"}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { Bell, ChevronDown, ChevronLeft, Clock3, HelpCircle, LogOut, MessageSquareMore, Settings } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -133,6 +134,12 @@ export function DashboardHeader({
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetail | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const bellRef = useRef<HTMLDivElement | null>(null);
+  const clockRef = useRef({
+    time: "",
+    seconds: "",
+    label: "",
+    date: "",
+  });
   const visibleUnreadMessages =
     pathname === "/dashboard/messages" ? 0 : unreadMessages;
   const visibleBellNotifications = notificationsHydrated ? requestNotifications + assignmentNotifications + noticeNotifications : 0;
@@ -152,7 +159,7 @@ export function DashboardHeader({
       const second = timeParts.find((part) => part.type === "second")?.value ?? "00";
       const dayPeriod = timeParts.find((part) => part.type === "dayPeriod")?.value ?? "";
 
-      setCurrentClock({
+      const newClock = {
         time: `${hour}:${minute}:${second}`,
         seconds: dayPeriod,
         label: new Intl.DateTimeFormat("en-BD", {
@@ -165,7 +172,18 @@ export function DashboardHeader({
           month: "short",
           year: "numeric",
         }).format(now),
-      });
+      };
+
+      // Only update state if the time actually changed
+      if (
+        clockRef.current.time !== newClock.time ||
+        clockRef.current.seconds !== newClock.seconds ||
+        clockRef.current.label !== newClock.label ||
+        clockRef.current.date !== newClock.date
+      ) {
+        clockRef.current = newClock;
+        setCurrentClock(newClock);
+      }
     }
 
     syncTime();
@@ -451,7 +469,13 @@ export function DashboardHeader({
   }
 
   return (
-    <header className="dashboard-topbar sticky top-0 z-20 flex items-center justify-between gap-4 px-4 py-4 xl:px-6">
+    <motion.header
+      animate={{ opacity: 1, y: 0 }}
+      className="dashboard-topbar sticky top-0 z-20 flex items-center justify-between gap-4 px-4 py-4 xl:px-6"
+      data-page-section
+      initial={{ opacity: 0, y: -16 }}
+      transition={{ duration: 0.32, ease: "easeOut" }}
+    >
       <MobileSidebar
         user={{
           name: user.name,
@@ -461,7 +485,12 @@ export function DashboardHeader({
         }}
       />
       <div className="flex-1" />
-      <div className="ml-auto flex items-center gap-5">
+      <motion.div
+        animate={{ opacity: 1, x: 0 }}
+        className="ml-auto flex items-center gap-5"
+        initial={{ opacity: 0, x: 20 }}
+        transition={{ delay: 0.08, duration: 0.36, ease: "easeOut" }}
+      >
         <ThemeToggle className="hidden h-12 w-12 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] text-[var(--foreground)] shadow-[0_10px_24px_rgba(148,163,184,0.14)] hover:bg-[var(--panel-alt)] md:inline-flex" />
         <div className="hidden items-center gap-2 text-[var(--foreground)] md:flex">
           <Clock3 className="h-4 w-4 text-[var(--muted-foreground)]" />
@@ -669,7 +698,7 @@ export function DashboardHeader({
             </div>
           ) : null}
         </div>
-      </div>
-    </header>
+      </motion.div>
+    </motion.header>
   );
 }

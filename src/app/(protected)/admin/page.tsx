@@ -28,10 +28,21 @@ function getDepartmentIcon(name: string) {
 export default async function AdminPage() {
   const actor = await requireAdminOrManager();
   const { users, departments, latestReportSummaries, metrics } = await getAdminOverview();
+  const reportSummaryByUserId = new Map((latestReportSummaries ?? []).map((report) => [report.userId, report]));
+  const departmentInsights = (departments ?? []).map((department) => {
+    const members = (users ?? []).filter((user) => user.departmentId === department.id);
+
+    return {
+      ...department,
+      memberCount: members.length,
+      activeCount: members.filter((user) => user.isActive).length,
+      headCount: members.filter((user) => user.role === "manager").length,
+    };
+  });
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap justify-end gap-3">
+      <div className="flex flex-wrap justify-end gap-3" data-page-section>
         <a href="/admin/departments">
           <Button type="button" variant="secondary">
             Manage Departments
@@ -44,7 +55,7 @@ export default async function AdminPage() {
         </a>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-4" data-page-section>
         <Card className="card-gradient-blue">
           <CardHeader>
             <CardTitle className="text-white">Tracked Work</CardTitle>
@@ -79,39 +90,43 @@ export default async function AdminPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-3" data-page-section>
         <Card>
           <CardHeader>
             <CardTitle>Users & Roles</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {(users ?? []).slice(0, 6).map((user) => (
-              <div key={user.id} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-white">{user.name}</p>
-                    <p className="text-sm text-[var(--muted-foreground)]">{user.email}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      {formatCurrency(Number(user.monthlySalary ?? 0))} monthly - {formatCurrency(user.weeklyRate)}/week
-                    </p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      {formatCurrency(user.dailyRate)}/day - {formatCurrency(user.hourlyRate)}/hour
-                    </p>
+          <CardContent>
+            <div className="overflow-hidden rounded-[26px] border border-[var(--panel-border)] bg-[var(--panel-muted)]">
+              {(users ?? []).slice(0, 6).map((user) => (
+                <div
+                  key={user.id}
+                  className="flex flex-col gap-3 border-b border-[var(--panel-border)] px-4 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-[var(--foreground)]">{user.name}</p>
+                      <Badge variant={user.isActive ? "warning" : "secondary"}>
+                        {user.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      <Badge>{roleUiTitle(user.role)}</Badge>
+                    </div>
+                    <p className="mt-1 truncate text-sm text-[var(--muted-foreground)]">{user.email}</p>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--muted-foreground)]">
+                      <span>{user.department?.name ?? "Executive"}</span>
+                      <span>{formatCurrency(Number(user.monthlySalary ?? 0))}/month</span>
+                      <span>{formatCurrency(user.hourlyRate)}/hour</span>
+                      <span>{formatCurrency(user.dailyRate)}/day</span>
+                      <span>{reportSummaryByUserId.get(user.id)?.totalTrackedMinutes ?? 0} min tracked</span>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <Badge variant={user.isActive ? "warning" : "secondary"}>
-                      {user.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                    <Badge>{roleUiTitle(user.role)}</Badge>
+                  <div className="flex justify-end">
+                    {user.id === actor.id || (actor.role === "manager" && user.role === "manager") ? null : (
+                      <UserStatusToggle isActive={user.isActive} userId={user.id} userName={user.name} />
+                    )}
                   </div>
                 </div>
-                <div className="mt-3 flex justify-end">
-                  {user.id === actor.id || (actor.role === "manager" && user.role === "manager") ? null : (
-                    <UserStatusToggle isActive={user.isActive} userId={user.id} userName={user.name} />
-                  )}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -120,17 +135,28 @@ export default async function AdminPage() {
             <CardTitle>Departments</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {(departments ?? []).map((department) => {
+            {(departmentInsights ?? []).map((department) => {
               const Icon = getDepartmentIcon(department.name);
 
               return (
-              <div key={department.id} className="flex items-center gap-3 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 text-[var(--foreground)]">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-                  <Icon className="h-5 w-5" />
+              <div
+                key={department.id}
+                className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 text-[var(--foreground)]"
+                data-dashboard-row
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="font-semibold">{department.name}</p>
+                    <p className="text-xs text-[var(--muted-foreground)]">Department workspace</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold">{department.name}</p>
-                  <p className="text-xs text-[var(--muted-foreground)]">Department workspace</p>
+                <div className="flex flex-wrap justify-end gap-2 text-[11px]">
+                  <Badge variant="secondary">{department.memberCount} employees</Badge>
+                  <Badge variant="success">{department.activeCount} active</Badge>
+                  {department.headCount ? <Badge variant="purple">{department.headCount} head</Badge> : null}
                 </div>
               </div>
             )})}
@@ -143,7 +169,7 @@ export default async function AdminPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {(latestReportSummaries ?? []).map((report) => (
-              <div key={report.userId} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
+              <div key={report.userId} className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4" data-dashboard-row>
                 <div className="flex items-start gap-3">
                   <Avatar className="h-11 w-11">
                     {report.avatar_url ? <AvatarImage alt={report.name} src={report.avatar_url} /> : null}
