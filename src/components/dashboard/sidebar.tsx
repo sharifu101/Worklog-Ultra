@@ -1,6 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BellRing, BriefcaseBusiness, CalendarCheck2, CheckSquare2, ClipboardList, FileClock, FolderTree, LayoutDashboard, LogOut, Menu, Shield, UserRoundSearch, Users, X } from "lucide-react";
@@ -11,8 +12,8 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/dashboard/plan", icon: ClipboardList, label: "Morning Plan" },
-  { href: "/dashboard/report", icon: FileClock, label: "Evening Report" },
+  { href: "/dashboard/plan", icon: ClipboardList, label: "Today's Task" },
+  { href: "/dashboard/report", icon: FileClock, label: "Report" },
   { href: "/dashboard/attendance", icon: CalendarCheck2, label: "Attendance" },
   { href: "/dashboard/history", icon: BriefcaseBusiness, label: "History" },
   { href: "/dashboard/assignments", icon: CheckSquare2, label: "Assignments" },
@@ -61,7 +62,12 @@ function SidebarContent({
           <p className="sidebar-force-white text-lg font-bold tracking-[-0.02em]">WorkLog Ultra</p>
         </div>
       </div>
-      <nav className="mt-6 space-y-1">
+      <motion.nav
+        animate={{ opacity: 1, x: 0 }}
+        className="mt-6 space-y-1"
+        initial={{ opacity: 0, x: -18 }}
+        transition={{ duration: 0.38, ease: "easeOut" }}
+      >
         {navItems.map((item) => {
           const active = pathname === item.href;
           const Icon = item.icon;
@@ -82,6 +88,12 @@ function SidebarContent({
           if (hiddenForEmployee || hiddenDepartments || hiddenForTeam || hiddenWorkMonitor || hiddenForAdminWorkerFlow || hiddenRequestInboxForAdmin) return null;
 
           const linkNode = (
+            <motion.div
+              key={item.href}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              whileHover={{ x: 4 }}
+              whileTap={{ scale: 0.99 }}
+            >
             <Link
               key={item.href}
               href={item.href}
@@ -98,6 +110,7 @@ function SidebarContent({
                 <span className="ml-auto inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-[#ff4d6d]" />
               ) : null}
             </Link>
+            </motion.div>
           );
 
           if (mobile) {
@@ -110,7 +123,7 @@ function SidebarContent({
 
           return linkNode;
         })}
-      </nav>
+      </motion.nav>
       <div className={cn("mt-auto", mobile && "mb-6")}>
         <p className="px-3 pb-2 text-sm font-medium text-white/70">{user.designation ?? roleUiTitle(user.role)}</p>
         <button
@@ -132,9 +145,14 @@ export function Sidebar({ user }: { user: SidebarUser }) {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[250px] shrink-0 bg-[linear-gradient(180deg,#091427_0%,#0d1a2f_100%)] p-4 lg:flex lg:flex-col">
+    <motion.aside
+      animate={{ opacity: 1, x: 0 }}
+      className="sticky top-0 hidden h-screen w-[250px] shrink-0 bg-[linear-gradient(180deg,#091427_0%,#0d1a2f_100%)] p-4 lg:flex lg:flex-col"
+      initial={{ opacity: 0, x: -26 }}
+      transition={{ duration: 0.42, ease: "easeOut" }}
+    >
       <SidebarContent pathname={pathname} user={user} />
-    </aside>
+    </motion.aside>
   );
 }
 

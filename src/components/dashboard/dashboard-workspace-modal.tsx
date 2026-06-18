@@ -48,6 +48,7 @@ export function DashboardWorkspaceModal({
   initialTasks,
   suggestions,
   userDepartmentId,
+  isTenderDepartment = false,
   role,
   reportTasks,
   reportDate,
@@ -59,6 +60,7 @@ export function DashboardWorkspaceModal({
   initialTasks: InitialTask[];
   suggestions: Suggestion[];
   userDepartmentId?: string | null;
+  isTenderDepartment?: boolean;
   role: "employee" | "hr" | "manager" | "admin";
   reportTasks: ReportTask[];
   reportDate: string;
@@ -87,7 +89,7 @@ export function DashboardWorkspaceModal({
           type="button"
         >
           <Plus className="h-4 w-4" />
-          Create Plan
+          Add Task
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -97,7 +99,7 @@ export function DashboardWorkspaceModal({
             <div>
               <Dialog.Title className="text-lg font-bold text-[var(--foreground)]">Today&apos;s Workspace</Dialog.Title>
               <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Add tasks and save today&apos;s plan here. Start task time after it appears on the dashboard.
+                Add tasks and save today&apos;s task list here. Start task time after it appears on the dashboard.
               </p>
             </div>
             <Dialog.Close asChild>
@@ -149,6 +151,7 @@ export function DashboardWorkspaceModal({
                 currentUserId={currentUserId}
                 departments={departments}
                 initialTasks={initialTasks}
+                isTenderDepartment={isTenderDepartment}
                 onSaved={() => setOpen(false)}
                 role={role}
                 suggestions={suggestions}

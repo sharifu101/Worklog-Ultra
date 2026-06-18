@@ -7,11 +7,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { extractContinuationMeta, stripContinuationMeta } from "@/lib/task-continuation";
 import { stripRecurringTaskMeta } from "@/lib/recurring-task-templates";
-import { formatDateTimeInDhaka, formatMinutes } from "@/lib/utils";
+import { formatDateTimeInDhaka, formatMinutes, formatTimeOnlyInDhaka } from "@/lib/utils";
 
 type MonitorDepartment = {
   id: string;
   name: string;
+};
+
+type MonitorAttendance = {
+  status: "present" | "late" | "half_day" | "absent" | "remote";
+  checkInAt: Date | string | null;
+  checkOutAt: Date | string | null;
+  breakMinutes: number;
+  workingMinutes: number;
+  note: string | null;
 };
 
 type MonitorTask = {
@@ -38,6 +47,7 @@ type MonitorUser = {
   taskCount: number;
   completedTaskCount: number;
   totalTrackedMinutes: number;
+  attendance: MonitorAttendance | null;
   todaysPlans: MonitorTask[];
 };
 
@@ -78,6 +88,22 @@ function statusTone(status: string) {
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
+function attendanceTone(status?: string | null) {
+  if (status === "present" || status === "remote") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (status === "late" || status === "half_day") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  if (status === "absent") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+
+  return "border-slate-200 bg-slate-50 text-slate-600";
+}
+
 function roleLabel(role: string) {
   if (role === "manager") return "Team Head";
   if (role === "admin") return "CEO/Admin";
@@ -106,7 +132,6 @@ function getContinuationSummary(description: string | null) {
     totalDays: Math.max(continuationMeta.daysActive || 0, continuationMeta.dailyLogs.length, 1),
     totalTrackedMinutes,
     lastWorked,
-    dailyLogs: continuationMeta.dailyLogs,
   };
 }
 
@@ -147,6 +172,17 @@ export function DirectoryCenter({
     return users.filter((user) => user.departmentId === selectedDepartmentId);
   }, [selectedDepartmentId, users]);
 
+  const departmentCounts = useMemo(
+    () =>
+      new Map(
+        departments.map((department) => [
+          department.id,
+          users.filter((user) => user.departmentId === department.id).length,
+        ]),
+      ),
+    [departments, users],
+  );
+
   const totalTasks = filteredUsers.reduce((sum, user) => sum + user.taskCount, 0);
   const totalDone = filteredUsers.reduce((sum, user) => sum + user.completedTaskCount, 0);
   const totalTrackedMinutes = filteredUsers.reduce((sum, user) => sum + user.totalTrackedMinutes, 0);
@@ -158,7 +194,7 @@ export function DirectoryCenter({
           <div>
             <CardTitle>Work Monitor</CardTitle>
             <CardDescription>
-              Review today&apos;s department plans, task progress, tracked time, and latest work notes with simple department and employee filters.
+              Review today&apos;s department plans, task progress, tracked time, attendance, and latest work notes with simple filters.
             </CardDescription>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -178,7 +214,7 @@ export function DirectoryCenter({
                   {canSwitchDepartment ? <SelectItem value="all">All departments</SelectItem> : null}
                   {(departments ?? []).map((department) => (
                     <SelectItem key={department.id} value={department.id}>
-                      {department.name}
+                      {department.name} ({departmentCounts.get(department.id) ?? 0})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -221,133 +257,112 @@ export function DirectoryCenter({
       </CardHeader>
       <CardContent className="space-y-4">
         {filteredUsers.length ? (
-          <div className="space-y-4">
+          <div className="overflow-hidden rounded-[28px] border border-[var(--panel-border)] bg-[var(--panel-muted)]">
             {(filteredUsers ?? []).map((user) => (
-              <section key={user.id} className="overflow-hidden rounded-3xl border border-[var(--panel-border)] bg-[var(--panel-muted)]">
-                <div className="p-5">
-                <div className="flex items-start gap-4">
-                  <Avatar className="h-14 w-14">
-                    {user.avatar_url ? <AvatarImage alt={user.name} src={user.avatar_url} /> : null}
-                    <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-                  </Avatar>
+              <section key={user.id} className="border-b border-[var(--panel-border)] px-4 py-4 last:border-b-0">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-lg font-semibold text-[var(--foreground)]">{user.name}</p>
-                      <Badge variant="secondary">{roleLabel(user.role)}</Badge>
-                    </div>
-                    <p className="mt-1 text-sm font-medium text-blue-600">{user.departmentName}</p>
-                    <p className="text-sm text-[var(--muted-foreground)]">{user.designation ?? roleLabel(user.role)}</p>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--muted-foreground)]">
-                      <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
-                        {user.taskCount} task
-                      </span>
-                      <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
-                        {user.completedTaskCount} done
-                      </span>
-                      <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
-                        {formatMinutes(user.totalTrackedMinutes)}
-                      </span>
+                    <div className="flex items-start gap-4">
+                      <Avatar className="h-12 w-12">
+                        {user.avatar_url ? <AvatarImage alt={user.name} src={user.avatar_url} /> : null}
+                        <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-lg font-semibold text-[var(--foreground)]">{user.name}</p>
+                          <Badge variant="secondary">{roleLabel(user.role)}</Badge>
+                          {user.attendance ? (
+                            <span
+                              className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${attendanceTone(user.attendance.status)}`}
+                            >
+                              {user.attendance.status.replace("_", " ")}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-[var(--muted-foreground)]">
+                          <span>{user.departmentName}</span>
+                          <span>{user.designation ?? roleLabel(user.role)}</span>
+                          <span>{user.taskCount} tasks</span>
+                          <span>{user.completedTaskCount} done</span>
+                          <span>{formatMinutes(user.totalTrackedMinutes)} tracked</span>
+                          <span>
+                            Attendance {user.attendance?.checkInAt ? formatTimeOnlyInDhaka(user.attendance.checkInAt) : "Not checked in"}
+                            {" - "}
+                            {user.attendance?.checkOutAt ? formatTimeOnlyInDhaka(user.attendance.checkOutAt) : "--"}
+                          </span>
+                        </div>
+                        {user.attendance?.note ? (
+                          <p className="mt-2 text-xs text-[var(--muted-foreground)]">Attendance note: {user.attendance.note}</p>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
+
+                  <div className="flex flex-wrap gap-2 text-xs text-[var(--muted-foreground)] xl:max-w-[34%] xl:justify-end">
+                    <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                      Break {formatMinutes(user.attendance?.breakMinutes ?? 0)}
+                    </span>
+                    <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                      Work {formatMinutes(user.attendance?.workingMinutes ?? 0)}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="border-t border-[var(--panel-border)] bg-[var(--panel)]">
+                <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)]">
                   {user.todaysPlans.length ? (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-left">
-                        <thead className="bg-[var(--panel-alt)]">
-                          <tr className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-                            <th className="px-5 py-3 font-semibold">#</th>
-                            <th className="px-4 py-3 font-semibold">Task</th>
-                            <th className="px-4 py-3 font-semibold">Priority</th>
-                            <th className="px-4 py-3 font-semibold">Status</th>
-                            <th className="px-4 py-3 font-semibold">Progress</th>
-                            <th className="px-4 py-3 font-semibold">Tracked</th>
-                            <th className="px-4 py-3 font-semibold">Started</th>
-                            <th className="px-4 py-3 font-semibold">Ended</th>
-                            <th className="px-4 py-3 font-semibold">Latest Note</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(user.todaysPlans ?? []).map((task, index) => (
-                            <tr className="border-t border-[var(--panel-border)] align-top" key={task.id}>
-                              <td className="px-5 py-4">
-                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#4f5ef7] text-xs font-semibold text-white">
+                    <div className="divide-y divide-[var(--panel-border)]">
+                      {(user.todaysPlans ?? []).map((task, index) => {
+                        const continuationSummary = getContinuationSummary(task.description);
+
+                        return (
+                          <div className="px-4 py-3" key={task.id}>
+                            <div className="flex flex-col gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#4f5ef7] text-[11px] font-semibold text-white">
                                   {index + 1}
                                 </span>
-                              </td>
-                              <td className="px-4 py-4">
-                                <p className="min-w-[220px] text-sm font-semibold text-[var(--foreground)]">{task.title}</p>
-                                {getTaskBody(task.description) ? (
-                                  <p className="mt-1 max-w-[320px] text-sm leading-6 text-[var(--muted-foreground)]">
-                                    {getTaskBody(task.description)}
-                                  </p>
-                                ) : null}
-                                {getContinuationSummary(task.description) ? (
-                                  <div className="mt-3 rounded-2xl border border-violet-200 bg-violet-50 px-3 py-3">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <Badge variant="purple">Continued</Badge>
-                                      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-700">
-                                        {getContinuationSummary(task.description)?.totalDays} days
-                                      </span>
-                                      <span className="text-xs text-slate-600">
-                                        Overall {formatMinutes(getContinuationSummary(task.description)?.totalTrackedMinutes ?? 0)}
-                                      </span>
-                                    </div>
-                                    <div className="mt-2 grid gap-2 text-xs text-slate-700 md:grid-cols-3">
-                                      <div className="rounded-xl bg-white/80 px-2.5 py-2">
-                                        <p className="font-semibold uppercase tracking-[0.12em] text-violet-700">Started From</p>
-                                        <p className="mt-1">{getContinuationSummary(task.description)?.sourceDate}</p>
-                                      </div>
-                                      <div className="rounded-xl bg-white/80 px-2.5 py-2">
-                                        <p className="font-semibold uppercase tracking-[0.12em] text-violet-700">Last Worked</p>
-                                        <p className="mt-1">{getContinuationSummary(task.description)?.lastWorked ?? "Not set"}</p>
-                                      </div>
-                                      <div className="rounded-xl bg-white/80 px-2.5 py-2">
-                                        <p className="font-semibold uppercase tracking-[0.12em] text-violet-700">Progress History</p>
-                                        <p className="mt-1">Open the date-wise log below</p>
-                                      </div>
-                                    </div>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                      {(getContinuationSummary(task.description)?.dailyLogs ?? []).map((entry) => (
-                                        <span
-                                          className="rounded-full border border-violet-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700"
-                                          key={`${task.id}:${entry.date}`}
-                                        >
-                                          {entry.date} • {entry.progress}% • {formatMinutes(entry.trackedMinutes)}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : null}
-                              </td>
-                              <td className="px-4 py-4">
-                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${priorityTone(task.priority)}`}>
+                                <p className="text-sm font-semibold text-[var(--foreground)]">{task.title}</p>
+                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${priorityTone(task.priority)}`}>
                                   {task.priority}
                                 </span>
-                              </td>
-                              <td className="px-4 py-4">
-                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] ${statusTone(task.status)}`}>
+                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${statusTone(task.status)}`}>
                                   {task.status.replace("_", " ")}
                                 </span>
-                              </td>
-                              <td className="px-4 py-4 text-sm font-medium text-[var(--foreground)]">{task.completionPercent}%</td>
-                              <td className="px-4 py-4 text-sm font-medium text-[var(--foreground)]">{formatMinutes(task.trackedMinutes)}</td>
-                              <td className="px-4 py-4 text-sm font-medium text-[var(--foreground)]">{formatDateTimeInDhaka(task.actualStart)}</td>
-                              <td className="px-4 py-4 text-sm font-medium text-[var(--foreground)]">{formatDateTimeInDhaka(task.actualEnd)}</td>
-                              <td className="px-4 py-4">
-                                <p className="min-w-[220px] text-sm leading-6 text-[var(--foreground)]">
-                                  {task.note || "No note"}
-                                </p>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                                {continuationSummary ? <Badge variant="purple">Continued</Badge> : null}
+                              </div>
+
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--muted-foreground)]">
+                                <span>Progress {task.completionPercent}%</span>
+                                <span>Tracked {formatMinutes(task.trackedMinutes)}</span>
+                                <span>Start {formatDateTimeInDhaka(task.actualStart)}</span>
+                                <span>End {formatDateTimeInDhaka(task.actualEnd)}</span>
+                                <span>Note {task.note || "No note"}</span>
+                              </div>
+
+                              {getTaskBody(task.description) ? (
+                                <p className="text-sm leading-6 text-[var(--muted-foreground)]">{getTaskBody(task.description)}</p>
+                              ) : null}
+
+                              {continuationSummary ? (
+                                <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
+                                  <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1">
+                                    From {continuationSummary.sourceDate}
+                                  </span>
+                                  <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1">
+                                    {continuationSummary.totalDays} days
+                                  </span>
+                                  <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1">
+                                    Overall {formatMinutes(continuationSummary.totalTrackedMinutes)}
+                                  </span>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
-                    <div className="px-5 py-5 text-sm text-[var(--muted-foreground)]">
+                    <div className="px-4 py-4 text-sm text-[var(--muted-foreground)]">
                       No morning plan added yet for today.
                     </div>
                   )}

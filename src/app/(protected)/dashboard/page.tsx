@@ -1,26 +1,20 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Check, CheckCircle2, CircleAlert, ClipboardList, Clock3, Play, PlayCircle, TimerReset } from "lucide-react";
+import { Check, CheckCircle2, CircleAlert, ClipboardList, Clock3, PlayCircle, TimerReset } from "lucide-react";
 import { DashboardProgressCard } from "@/components/dashboard/dashboard-progress-card";
 import { DashboardRecurringQuickAdd } from "@/components/dashboard/dashboard-recurring-quick-add";
 import { DashboardTaskNotifier } from "@/components/dashboard/dashboard-task-notifier";
-import { DashboardTaskTimerAction } from "@/components/dashboard/dashboard-task-timer-action";
 import { DashboardTimeSummary } from "@/components/dashboard/dashboard-time-summary";
 import { DashboardWorkdayTimer } from "@/components/dashboard/dashboard-workday-timer";
+import { DashboardWorkPlanSection } from "@/components/dashboard/dashboard-work-plan-section";
 import { DashboardWorkspaceModal } from "@/components/dashboard/dashboard-workspace-modal";
-import { AssignmentReviewControls } from "@/components/dashboard/assignment-review-controls";
-import { TaskManageControls } from "@/components/dashboard/task-manage-controls";
 import { requireUser } from "@/lib/auth/server";
 import { extractAssignmentReviewReason } from "@/lib/assignment-review";
-import { isMovedToHistory, stripHistoryMeta } from "@/lib/task-history-shared";
-import { isRecurringTaskDescription, stripRecurringTaskMeta } from "@/lib/recurring-task-templates";
-import { extractContinuationMeta, stripContinuationMeta } from "@/lib/task-continuation";
+import { filterTodaysWorkPlanTasks } from "@/lib/dashboard-work-plan-filter";
 import { canUserEditReportDate, getAssignableUsers, getCurrentUserAttendanceSnapshot, getDashboardData, getDepartments, getPlanSuggestions, getPlanWithReports } from "@/lib/worklog";
-import { formatDateTimeInDhaka, toDateOnly } from "@/lib/utils";
+import { formatDateTimeInDhaka, isTenderDepartmentName, toDateOnly } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-
-type DashboardTask = Awaited<ReturnType<typeof getDashboardData>>["tasks"][number];
 
 const statCardStyles = [
   {
@@ -76,66 +70,10 @@ const statCardStyles = [
 ];
 
 const notices = [
-  "Submit your morning plan before the first work block starts.",
-  "Complete your evening report before day close.",
+  "Save today's tasks before the first work block starts.",
+  "Complete your report before day close.",
   "Keep high-priority tasks updated so progress stays visible.",
 ];
-
-function getTaskStatus(task: DashboardTask) {
-  const latest = task.updates[0];
-
-  if (!latest) {
-    return {
-      label: "Pending",
-      chip: "bg-amber-50 text-amber-700",
-      actionTone: "bg-[#19a46b]",
-      actionIcon: Play,
-    };
-  }
-
-  if (latest.status === "done") {
-    return {
-      label: "Completed",
-      chip: "bg-emerald-50 text-emerald-700",
-      actionTone: "bg-[#17a36b]",
-      actionIcon: Check,
-    };
-  }
-
-  if (latest.status === "in_progress") {
-    return {
-      label: "In Progress",
-      chip: "bg-blue-50 text-blue-700",
-      actionTone: "bg-[#2767db]",
-      actionIcon: Play,
-    };
-  }
-
-  return {
-    label: "Pending",
-    chip: "bg-amber-50 text-amber-700",
-    actionTone: "bg-[#19a46b]",
-    actionIcon: Play,
-  };
-}
-
-function getPriorityTone(priority: string) {
-  if (priority === "high" || priority === "critical") {
-    return "border border-rose-300 bg-gradient-to-r from-rose-500 via-pink-500 to-red-500 text-white shadow-[0_10px_22px_rgba(244,63,94,0.24)]";
-  }
-
-  if (priority === "normal") {
-    return "border border-amber-300 bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-500 text-slate-950 shadow-[0_10px_22px_rgba(245,158,11,0.22)]";
-  }
-
-  return "border border-emerald-300 bg-gradient-to-r from-emerald-500 via-teal-500 to-green-500 text-white shadow-[0_10px_22px_rgba(16,185,129,0.22)]";
-}
-
-function formatPriority(priority: string) {
-  if (priority === "critical") return "High";
-  if (priority === "normal") return "Medium";
-  return priority.charAt(0).toUpperCase() + priority.slice(1);
-}
 
 function priorityRank(priority: string) {
   if (priority === "critical") return 0;
@@ -156,38 +94,6 @@ function formatHoursAndMinutes(hoursLabel: string) {
   return `${hours}h ${String(minutes).padStart(2, "0")}m`;
 }
 
-function formatDurationFromMinutes(totalMinutes: number) {
-  const safeMinutes = Math.max(0, totalMinutes);
-  const hours = Math.floor(safeMinutes / 60);
-  const minutes = safeMinutes % 60;
-  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
-}
-
-function getContinuationSummary(task: DashboardTask) {
-  const continuationMeta = extractContinuationMeta(task.taskDescription);
-
-  if (!continuationMeta) {
-    return null;
-  }
-
-  const totalDays = Math.max(
-    continuationMeta.daysActive || 0,
-    continuationMeta.dailyLogs?.length || 0,
-    1,
-  );
-  const totalTrackedMinutes = (continuationMeta.dailyLogs ?? []).reduce((sum, entry) => sum + entry.trackedMinutes, 0);
-  const lastWorkedDate =
-    continuationMeta.dailyLogs && continuationMeta.dailyLogs.length
-      ? continuationMeta.dailyLogs[continuationMeta.dailyLogs.length - 1]?.date
-      : continuationMeta.sourceDate;
-
-  return {
-    totalDays,
-    totalTrackedMinutes,
-    lastWorkedDate,
-  };
-}
-
 function formatDashboardDate(value: Date) {
   return new Intl.DateTimeFormat("en-BD", {
     timeZone: "Asia/Dhaka",
@@ -201,35 +107,6 @@ function formatDashboardDate(value: Date) {
 function formatTimeOnly(value?: Date | null) {
   if (!value) return "--:-- --";
   return formatDateTimeInDhaka(value).split(", ").pop() ?? "--:-- --";
-}
-
-function formatPlannedTime(task: DashboardTask) {
-  const start = task.updates[0]?.actualStart;
-  const end = task.updates[0]?.actualEnd;
-
-  if (start && end) {
-    return `${formatTimeOnly(start)} - ${formatTimeOnly(end)}`;
-  }
-
-  if (start) {
-    return `${formatTimeOnly(start)} - --:-- --`;
-  }
-
-  return "--:-- --";
-}
-
-function getTaskNote(task: DashboardTask) {
-  const latestUpdateNote = task.updates[0]?.note?.trim() ?? "";
-  if (latestUpdateNote) {
-    return latestUpdateNote;
-  }
-
-  const continuationNote = extractContinuationMeta(task.taskDescription)?.note?.trim() ?? "";
-  if (continuationNote) {
-    return continuationNote;
-  }
-
-  return stripHistoryMeta(stripRecurringTaskMeta(stripContinuationMeta(task.taskDescription))).trim();
 }
 
 function getMotivationalMessage(input: {
@@ -313,23 +190,9 @@ export default async function DashboardPage() {
   const workedMinutes = data.tasks.reduce((sum, task) => sum + (task.updates[0]?.trackedMinutes ?? 0), 0);
   const targetMinutes = Math.max(plannedTasks * 60, 8 * 60);
   const remainingMinutes = Math.max(targetMinutes - workedMinutes, 0);
-  const activeTasks = [...data.tasks]
-    .filter((task) => task.updates[0]?.status !== "done" && !isMovedToHistory(task.taskDescription))
-    .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || left.taskTitle.localeCompare(right.taskTitle));
-  const stickyCompletedTasks = data.tasks
-    .filter((task) => {
-      if (task.updates[0]?.status !== "done") {
-        return false;
-      }
-
-      if (isMovedToHistory(task.taskDescription)) {
-        return false;
-      }
-
-      return Boolean(extractContinuationMeta(task.taskDescription) || isRecurringTaskDescription(task.taskDescription));
-    })
-    .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || left.taskTitle.localeCompare(right.taskTitle));
-  const topTasks = [...activeTasks, ...stickyCompletedTasks].slice(0, 6);
+  const activeTasks = filterTodaysWorkPlanTasks(data.tasks).sort(
+    (left, right) => priorityRank(left.priority) - priorityRank(right.priority) || left.taskTitle.localeCompare(right.taskTitle),
+  );
   const urgentTasks = activeTasks.filter((task) => ["high", "critical"].includes(task.priority)).slice(0, 3);
   const attendanceStatusLabel =
     attendance?.checkInAt && !attendance?.checkOutAt
@@ -345,6 +208,7 @@ export default async function DashboardPage() {
     pendingTasks,
     trackedMinutes: workedMinutes,
   });
+  const isTenderDepartment = isTenderDepartmentName(user.department?.name);
 
   const statCards = [
     {
@@ -388,9 +252,10 @@ export default async function DashboardPage() {
           status: task.updates[0]?.status ?? "pending",
           trackedMinutes: task.updates[0]?.trackedMinutes ?? 0,
           actualEnd: task.updates[0]?.actualEnd?.toISOString() ?? null,
+          taskDescription: task.taskDescription,
         }))}
       />
-      <section className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <section className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between" data-page-section>
         <div>
           <h1 className="max-w-4xl text-lg font-semibold leading-tight text-[var(--foreground)] md:text-xl">
             {motivation.message}
@@ -403,6 +268,7 @@ export default async function DashboardPage() {
             currentUserId={user.id}
             departments={departments}
             initialTasks={[]}
+            isTenderDepartment={isTenderDepartment}
             assignableUsers={assignableUsers}
             reportDate={reportDate}
             reportTasks={(reportTasks ?? []).map((task) => ({
@@ -442,7 +308,7 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5" data-page-section>
         {statCards.map((item, index) => {
           const style = statCardStyles[index % statCardStyles.length];
           const Icon = style.icon;
@@ -450,6 +316,7 @@ export default async function DashboardPage() {
           return (
             <Link
               className={`group relative overflow-hidden rounded-[22px] border p-4 transition hover:-translate-y-0.5 ${style.card} ${style.border} ${style.shadow}`}
+              data-dashboard-card
               href={item.href}
               key={item.title}
             >
@@ -458,6 +325,7 @@ export default async function DashboardPage() {
                 <Image
                   alt={item.title}
                   className="object-contain object-right-center"
+                  data-dashboard-float="soft"
                   fill
                   sizes="(max-width: 1280px) 190px, 250px"
                   src={style.art}
@@ -490,164 +358,55 @@ export default async function DashboardPage() {
         })}
       </section>
 
-      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.82fr)_360px]">
+      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.82fr)_360px]" data-page-section>
         <div className="space-y-4">
           <DashboardRecurringQuickAdd
             allowOtherDepartment={user.role === "admin"}
             currentUserDepartmentId={user.departmentId || departments[0]?.id || ""}
+            isTenderDepartment={isTenderDepartment}
             currentUserId={user.id}
             departments={departments ?? []}
             existingTaskTitles={(activeTasks ?? []).map((task) => task.taskTitle)}
           />
 
-          <div className="overflow-hidden rounded-[28px] border border-[var(--panel-border)] bg-[var(--panel)] shadow-[var(--shadow)]">
-            <div className="flex flex-col gap-2 border-b border-[var(--panel-border)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-[var(--foreground)]">Today&apos;s Work Plan</h2>
-              </div>
-              <p className="text-sm font-medium text-[var(--muted-foreground)]">{formatDashboardDate(today)}</p>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left">
-                <thead className="bg-[var(--panel-alt)]">
-                  <tr className="text-sm text-[var(--muted-foreground)]">
-                    <th className="px-5 py-4 font-semibold">Task Name</th>
-                    <th className="px-4 py-4 font-semibold">Priority</th>
-                    <th className="px-4 py-4 font-semibold">Planned Time</th>
-                    <th className="px-4 py-4 font-semibold">Status</th>
-                    <th className="px-4 py-4 font-semibold">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topTasks.length ? (
-                    topTasks.map((task) => {
-                      const status = getTaskStatus(task);
-                      const continuationMeta = extractContinuationMeta(task.taskDescription);
-                      const continuationSummary = getContinuationSummary(task);
-                      const taskNote = getTaskNote(task);
-
-                      return (
-                        <tr className="border-t border-[var(--panel-border)] align-top" key={task.id}>
-                          <td className="px-5 py-4">
-                            <p className="text-sm font-semibold text-[var(--foreground)]">{task.taskTitle}</p>
-                            {continuationMeta ? (
-                              <div className="mt-2 space-y-2">
-                                <div className="flex flex-wrap gap-2">
-                                  <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-violet-700">
-                                    Continued Task
-                                  </span>
-                                  <span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-700">
-                                    Day {continuationMeta.daysActive || 1}
-                                  </span>
-                                  <span className="text-xs font-medium text-[var(--muted-foreground)]">
-                                    From {continuationMeta.sourceDate}
-                                  </span>
-                                </div>
-                                {continuationSummary ? (
-                                  <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
-                                    <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                                      Total Days: {continuationSummary.totalDays}
-                                    </span>
-                                    <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                                      Total Time: {formatDurationFromMinutes(continuationSummary.totalTrackedMinutes)}
-                                    </span>
-                                    {continuationSummary.lastWorkedDate ? (
-                                      <span className="rounded-full bg-slate-100 px-2.5 py-1">
-                                        Last Worked: {continuationSummary.lastWorkedDate}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-                              </div>
-                            ) : null}
-                            <p className="mt-1 text-sm text-[var(--muted-foreground)]">{task.user.department?.name ?? "General"}</p>
-                            {taskNote ? (
-                              <p className="mt-3 max-w-[720px] text-sm leading-6 text-slate-600">
-                                <span className="font-semibold text-slate-700">Note:</span>{" "}
-                                {taskNote}
-                              </p>
-                            ) : null}
-                          </td>
-                          <td className="px-4 py-4">
-                            <span
-                              className={`inline-flex min-w-[86px] items-center justify-center rounded-full px-3.5 py-1.5 text-xs font-bold uppercase tracking-[0.14em] ${getPriorityTone(task.priority)}`}
-                            >
-                              {formatPriority(task.priority)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-sm font-medium text-[var(--foreground)]">{formatPlannedTime(task)}</td>
-                          <td className="px-4 py-4">
-                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${status.chip}`}>
-                              {status.label}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="space-y-2">
-                              <DashboardTaskTimerAction
-                                canEdit={editAccess.allowed}
-                                initialActualEnd={task.updates[0]?.actualEnd ?? null}
-                                initialActualStart={task.updates[0]?.actualStart ?? null}
-                                initialStatus={task.updates[0]?.status ?? "pending"}
-                                initialTrackedMinutes={task.updates[0]?.trackedMinutes ?? 0}
-                                reportDate={toDateOnly(task.planDate)}
-                                taskId={task.id}
-                              />
-                              {task.assignedBy && task.userId === user.id ? (
-                                <AssignmentReviewControls
-                                  latestReview={
-                                    task.editRequests[0]
-                                      ? {
-                                          id: task.editRequests[0].id,
-                                          status: task.editRequests[0].status,
-                                          submitNote: extractAssignmentReviewReason(task.editRequests[0].reason) ?? "",
-                                          reviewNote: task.editRequests[0].reviewNote,
-                                          createdAt: task.editRequests[0].createdAt,
-                                          reviewedAt: task.editRequests[0].reviewedAt,
-                                          requestedById: task.editRequests[0].requestedById,
-                                          reviewerId: task.editRequests[0].reviewerId,
-                                        }
-                                      : null
-                                  }
-                                  mode="assignee"
-                                  taskId={task.id}
-                                  taskTitle={task.taskTitle}
-                                />
-                              ) : null}
-                              <TaskManageControls
-                                compact
-                                task={{
-                                  id: task.id,
-                                  taskTitle: task.taskTitle,
-                                  taskDescription: task.taskDescription,
-                                  priority: task.priority as "low" | "normal" | "high" | "critical",
-                                }}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td className="px-5 py-8 text-sm text-[var(--muted-foreground)]" colSpan={5}>
-                        No tasks added yet for today. Start by creating today&apos;s work plan.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="border-t border-[var(--panel-border)] px-5 py-4 text-center">
-              <Link className="text-sm font-semibold text-[#4f5ef7] hover:text-[#3f4ede]" href="/dashboard/plan">
-                View All Tasks
-              </Link>
-            </div>
-          </div>
+          <DashboardWorkPlanSection
+            canEdit={editAccess.allowed}
+            currentUserId={user.id}
+            formattedDate={formatDashboardDate(today)}
+            tasks={(data.tasks ?? []).map((task) => ({
+              id: task.id,
+              taskTitle: task.taskTitle,
+              taskDescription: task.taskDescription,
+              priority: task.priority,
+              planDate: toDateOnly(task.planDate),
+              assignedBy: task.assignedBy,
+              userId: task.userId,
+              departmentName: task.user.department?.name ?? "General",
+              updates: (task.updates ?? []).map((update) => ({
+                status: update.status,
+                note: update.note,
+                trackedMinutes: update.trackedMinutes,
+                actualStart: update.actualStart?.toISOString() ?? null,
+                actualEnd: update.actualEnd?.toISOString() ?? null,
+                reportDate: toDateOnly(update.reportDate),
+              })),
+              latestReview: task.editRequests[0]
+                ? {
+                    id: task.editRequests[0].id,
+                    status: task.editRequests[0].status as "pending" | "approved" | "rejected",
+                    submitNote: extractAssignmentReviewReason(task.editRequests[0].reason) ?? "",
+                    reviewNote: task.editRequests[0].reviewNote ?? null,
+                    createdAt: task.editRequests[0].createdAt.toISOString(),
+                    reviewedAt: task.editRequests[0].reviewedAt?.toISOString() ?? null,
+                    requestedById: task.editRequests[0].requestedById,
+                    reviewerId: task.editRequests[0].reviewerId ?? null,
+                  }
+                : null,
+            }))}
+          />
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <div className="rounded-[26px] border border-[var(--panel-border)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]">
+            <div className="rounded-[26px] border border-[var(--panel-border)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]" data-dashboard-panel>
               <div className="flex items-center gap-2">
                 <CircleAlert className="h-5 w-5 text-rose-500" />
                 <h3 className="text-xl font-bold text-[var(--foreground)]">High Priority Tasks</h3>
@@ -669,7 +428,7 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="rounded-[26px] border border-[var(--panel-border)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]">
+            <div className="rounded-[26px] border border-[var(--panel-border)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]" data-dashboard-panel>
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-xl font-bold text-[var(--foreground)]">Recent Notices</h3>
                 <Link className="text-sm font-semibold text-[#4f5ef7] hover:text-[#3f4ede]" href="/dashboard/help">
@@ -704,7 +463,7 @@ export default async function DashboardPage() {
             }))}
           />
 
-          <div className="rounded-[24px] border border-[var(--panel-border)] bg-[var(--panel)] p-4 shadow-[var(--shadow)]">
+          <div className="rounded-[24px] border border-[var(--panel-border)] bg-[var(--panel)] p-4 shadow-[var(--shadow)]" data-dashboard-panel>
             <h3 className="text-[1.05rem] font-bold text-[var(--foreground)]">Attendance</h3>
             <div className="mt-3 overflow-hidden rounded-[20px] border border-[var(--panel-border)]">
               <div className="grid grid-cols-2 divide-x divide-[var(--panel-border)]">

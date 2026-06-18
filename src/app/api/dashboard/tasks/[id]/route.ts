@@ -3,11 +3,43 @@ import { UserRole } from "@prisma/client";
 import { apiError, apiSuccess } from "@/lib/api";
 import { requireUser } from "@/lib/auth/server";
 import { db } from "@/lib/db";
-import { embedHistoryMeta } from "@/lib/task-history-shared";
+import { embedHistoryMeta, stripHistoryMeta } from "@/lib/task-history-shared";
 import { buildContinuationDescription } from "@/lib/task-continuation";
+import { buildFollowUpDescription } from "@/lib/task-follow-up";
 import { addDays } from "date-fns";
-import { stripHistoryMeta } from "@/lib/task-history-shared";
-import { toDateOnly } from "@/lib/utils";
+import { parseDhakaDateTime, toDateOnly } from "@/lib/utils";
+
+const TASK_ACTIONS = [
+  "schedule_continuation",
+  "clear_continuation",
+  "restore_to_dashboard",
+  "move_to_history",
+  "complete_task",
+] as const;
+
+async function clearAutoContinuationTask(task: {
+  userId: string;
+  planDate: Date;
+  taskTitle: string;
+}) {
+  const nextPlanDate = addDays(new Date(task.planDate), 1);
+  const existingCarryForward = await db.dailyTask.findFirst({
+    where: {
+      userId: task.userId,
+      planDate: nextPlanDate,
+      taskTitle: task.taskTitle,
+    },
+    select: { id: true, taskDescription: true },
+  });
+
+  if (!existingCarryForward?.taskDescription?.includes("[continued-task]")) {
+    return;
+  }
+
+  await db.dailyTask.delete({
+    where: { id: existingCarryForward.id },
+  });
+}
 
 async function findVisibleTask(id: string, actor: Awaited<ReturnType<typeof requireUser>>) {
   return db.dailyTask.findFirst({
@@ -68,7 +100,7 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const action = typeof body?.action === "string" ? body.action : "";
 
-  if (!["schedule_continuation", "clear_continuation", "restore_to_dashboard", "move_to_history"].includes(action)) {
+  if (!TASK_ACTIONS.includes(action as (typeof TASK_ACTIONS)[number])) {
     return apiError("Invalid task action.", 400);
   }
 
@@ -111,12 +143,139 @@ export async function POST(
   }
 
   const latestUpdate = task.updates[0];
-  if (!["restore_to_dashboard", "move_to_history"].includes(action) && (latestUpdate?.status === "done" || latestUpdate?.completionPercent === 100)) {
+  if (
+    !["restore_to_dashboard", "move_to_history", "complete_task"].includes(action) &&
+    (latestUpdate?.status === "done" || latestUpdate?.completionPercent === 100)
+  ) {
     return apiError("This task is already completed.", 400);
   }
 
   const today = toDateOnly();
   const isTodaysTask = toDateOnly(task.planDate) === today;
+
+  if (action === "complete_task") {
+    const completionStatus = body.completionStatus === "partial" ? "partial" : "done";
+    const completionNote = typeof body.completionNote === "string" ? body.completionNote.trim() : "";
+    const needFollowUp = Boolean(body.needFollowUp);
+    const followUpDate = typeof body.followUpDate === "string" ? body.followUpDate.trim() : "";
+    const followUpTime = typeof body.followUpTime === "string" ? body.followUpTime.trim() : "";
+    const followUpNote = typeof body.followUpNote === "string" ? body.followUpNote.trim() : "";
+    const trackedMinutes = Math.max(
+      0,
+      Number(body.trackedMinutes ?? latestUpdate?.trackedMinutes ?? 0),
+    );
+    const actualStart = body.actualStart
+      ? parseDhakaDateTime(String(body.actualStart))
+      : latestUpdate?.actualStart ?? null;
+    const actualEnd = body.actualEnd
+      ? parseDhakaDateTime(String(body.actualEnd))
+      : latestUpdate?.actualEnd ?? new Date();
+    const wantsFollowUp = needFollowUp || completionStatus === "partial";
+
+    if (wantsFollowUp && (!followUpDate || !followUpTime)) {
+      return apiError("Follow-up date and time are required.");
+    }
+
+    const completionPercent = completionStatus === "partial" ? 50 : 100;
+    const reportDate = new Date(task.planDate);
+
+    await db.dailyTaskUpdate.upsert({
+      where: {
+        dailyTaskId_reportDate: {
+          dailyTaskId: task.id,
+          reportDate,
+        },
+      },
+      update: {
+        status: "done",
+        note: completionNote || null,
+        completionPercent,
+        trackedMinutes,
+        actualStart,
+        actualEnd,
+      },
+      create: {
+        dailyTaskId: task.id,
+        reportDate,
+        status: "done",
+        note: completionNote || null,
+        completionPercent,
+        trackedMinutes,
+        actualStart,
+        actualEnd,
+        difficultyLevel: null,
+      },
+    });
+
+    await db.dailyTask.update({
+      where: { id: task.id },
+      data: {
+        taskDescription: embedHistoryMeta(task.taskDescription),
+      },
+    });
+
+    await clearAutoContinuationTask(task);
+
+    let followUpTaskId: string | null = null;
+
+    if (wantsFollowUp) {
+      const followUpDescription = buildFollowUpDescription({
+        originalDescription: stripHistoryMeta(task.taskDescription),
+        sourceTaskId: task.id,
+        scheduledDate: followUpDate,
+        scheduledTime: followUpTime,
+        reminderNote: followUpNote || completionNote,
+        completionStatus,
+      });
+
+      const existingFollowUp = await db.dailyTask.findFirst({
+        where: {
+          userId: task.userId,
+          planDate: new Date(followUpDate),
+          taskTitle: task.taskTitle,
+        },
+        select: { id: true },
+      });
+
+      if (existingFollowUp) {
+        await db.dailyTask.update({
+          where: { id: existingFollowUp.id },
+          data: {
+            taskDescription: followUpDescription,
+            priority: task.priority,
+            assignedBy: task.assignedBy,
+          },
+        });
+        followUpTaskId = existingFollowUp.id;
+      } else {
+        const created = await db.dailyTask.create({
+          data: {
+            userId: task.userId,
+            departmentId: task.departmentId,
+            planDate: new Date(followUpDate),
+            taskTitle: task.taskTitle,
+            taskDescription: followUpDescription,
+            priority: task.priority,
+            assignedBy: task.assignedBy,
+          },
+          select: { id: true },
+        });
+        followUpTaskId = created.id;
+      }
+    }
+
+    return apiSuccess({
+      message: wantsFollowUp
+        ? "Task completed and follow-up reminder scheduled."
+        : "Task completed successfully.",
+      followUpCreated: wantsFollowUp,
+      followUpTaskId,
+      followUpDate: wantsFollowUp ? followUpDate : null,
+      followUpTime: wantsFollowUp ? followUpTime : null,
+      trackedMinutes,
+      completionStatus,
+    });
+  }
 
   if (action === "move_to_history") {
     const reportDate = new Date(task.planDate);

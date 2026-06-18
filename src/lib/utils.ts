@@ -214,6 +214,10 @@ export function getGreetingInDhaka(value: Date | string = new Date()) {
   return "Good night";
 }
 
+export function isTenderDepartmentName(value?: string | null) {
+  return Boolean(value?.trim().toLowerCase().includes("tender"));
+}
+
 export function safeRedirect(pathname?: string | null) {
   if (!pathname || !pathname.startsWith("/")) {
     return "/dashboard";

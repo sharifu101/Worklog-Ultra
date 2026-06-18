@@ -487,7 +487,7 @@ export function ReportForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Evening Work Report</CardTitle>
+        <CardTitle>Daily Work Report</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
@@ -665,7 +665,7 @@ export function ReportForm({
         ))}
 
         <Button className="w-full" disabled={!canEdit || loading || autoSaving || !tasks.length} onClick={save} type="button">
-          {loading ? "Saving report..." : autoSaving ? "Auto-saving..." : "Submit Today's Report"}
+          {loading ? "Saving report..." : autoSaving ? "Auto-saving..." : "Save Report"}
         </Button>
       </CardContent>
     </Card>

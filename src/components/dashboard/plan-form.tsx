@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronUp, Sparkles, Trash2, WandSparkles, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { dispatchDashboardTasksCreated, scheduleDashboardTaskAutostart } from "@/lib/dashboard-live-events";
 import { OTHER_DEPARTMENT_ID } from "@/lib/recurring-task-templates";
 import { CONTINUATION_MARKER } from "@/lib/task-continuation";
 import { toDateOnly } from "@/lib/utils";
@@ -93,6 +94,7 @@ export function PlanForm({
   initialTasks = [],
   suggestions = [],
   userDepartmentId,
+  isTenderDepartment = false,
   role,
   assignableUsers = [],
   currentUserId,
@@ -103,6 +105,7 @@ export function PlanForm({
   initialTasks: Omit<Task, "clientId">[];
   suggestions: Suggestion[];
   userDepartmentId?: string | null;
+  isTenderDepartment?: boolean;
   role: "employee" | "hr" | "manager" | "admin";
   assignableUsers: AssignableUser[];
   currentUserId: string;
@@ -110,6 +113,7 @@ export function PlanForm({
   onSaved?: () => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const fallbackDepartmentId = userDepartmentId || departments[0]?.id || "";
   const fallbackAssigneeId = currentUserId;
   const validInitialTaskIds = useMemo(
@@ -299,10 +303,38 @@ export function PlanForm({
     }
 
     toast.success(result.message);
+    const createdOwnTasks = ((result.tasks ?? []) as Array<{
+      id: string;
+      userId: string;
+      taskTitle: string;
+      taskDescription?: string | null;
+      priority: string;
+      planDate: string;
+      assignedBy?: string | null;
+      department?: { name?: string | null } | null;
+    }>).filter((task) => task.userId === currentUserId && !task.assignedBy);
+    if (isTenderDepartment && createdOwnTasks[0]) {
+      scheduleDashboardTaskAutostart(createdOwnTasks[0].id, createdOwnTasks[0].planDate);
+    }
+    dispatchDashboardTasksCreated(
+      createdOwnTasks.map((task) => ({
+          id: task.id,
+          taskTitle: task.taskTitle,
+          taskDescription: task.taskDescription ?? "",
+          priority: task.priority,
+          planDate: task.planDate,
+          userId: task.userId,
+          assignedBy: task.assignedBy ?? null,
+          departmentName: task.department?.name ?? "General",
+        })),
+    );
     tasksToCreate.forEach((task) => removeTaskFromDraft(task));
     setTasks([makeTask(fallbackDepartmentId, fallbackAssigneeId)]);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(planDraftStorageKey);
+    }
+    if (isTenderDepartment && pathname !== "/dashboard") {
+      router.push("/dashboard");
     }
     router.refresh();
     onSaved?.();
@@ -395,9 +427,9 @@ export function PlanForm({
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <div>
-            <CardTitle>Morning Work Plan</CardTitle>
+            <CardTitle>Today&apos;s Task List</CardTitle>
             <p className="text-sm text-[var(--muted-foreground)]">
-              Add your tasks here first. After saving, start time from the dashboard.
+              Add today&apos;s tasks here first. After saving, start time from the dashboard.
             </p>
           </div>
           <Button
@@ -491,7 +523,7 @@ export function PlanForm({
           ))}
 
           <Button className="button-force-white w-full" disabled={loading} onClick={save} type="button">
-            {loading ? "Saving plan..." : "Add To Today's Plan"}
+            {loading ? "Saving tasks..." : "Save Today's Tasks"}
           </Button>
         </CardContent>
       </Card>

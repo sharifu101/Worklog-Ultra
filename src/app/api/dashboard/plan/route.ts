@@ -81,12 +81,22 @@ export async function POST(request: NextRequest) {
         },
         select: {
           id: true,
+          userId: true,
           taskTitle: true,
+          taskDescription: true,
+          priority: true,
+          planDate: true,
+          assignedBy: true,
           departmentId: true,
+          department: {
+            select: {
+              name: true,
+            },
+          },
         },
       }),
     ),
   );
 
-  return apiSuccess({ message: "Morning plan added successfully.", tasks: createdTasks });
+  return apiSuccess({ message: "Today's task list saved successfully.", tasks: createdTasks });
 }

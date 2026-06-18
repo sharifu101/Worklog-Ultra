@@ -1,6 +1,7 @@
 "use client";
 
-import { Pause, Play, Square, Timer } from "lucide-react";
+import type { ReactNode } from "react";
+import { Play, Timer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
@@ -17,6 +18,19 @@ type DashboardTaskTimerActionProps = {
   initialTrackedMinutes: number;
   initialActualStart?: Date | string | null;
   initialActualEnd?: Date | string | null;
+  compact?: boolean;
+  onDoneClick?: () => void;
+  onSnapshotChange?: (snapshot: TaskTimerSnapshot) => void;
+  afterDoneSlot?: ReactNode;
+};
+
+export type TaskTimerSnapshot = {
+  status: "done" | "in_progress" | "pending";
+  trackedMinutes: string;
+  trackedSeconds: string;
+  actualStart: string;
+  actualEnd: string;
+  runningStartedAt: string;
 };
 
 function toInputDateTime(value?: Date | string | null) {
@@ -87,6 +101,10 @@ export function DashboardTaskTimerAction({
   initialTrackedMinutes,
   initialActualStart,
   initialActualEnd,
+  compact = false,
+  onDoneClick,
+  onSnapshotChange,
+  afterDoneSlot,
 }: DashboardTaskTimerActionProps) {
   const router = useRouter();
   const storageKey = useMemo(() => `dashboard-task-timer:${reportDate}:${taskId}`, [reportDate, taskId]);
@@ -106,14 +124,9 @@ export function DashboardTaskTimerAction({
   const [actualEnd, setActualEnd] = useState(toInputDateTime(initialActualEnd));
   const [runningStartedAt, setRunningStartedAt] = useState("");
   const isCompleted = status === "done";
-  const canStart = canEdit && !saving && !runningStartedAt;
-  const canPause = canEdit && !saving && Boolean(runningStartedAt) && !isCompleted;
-  const canEnd =
-    canEdit &&
-    !saving &&
-    !isCompleted &&
-    !actualEnd &&
-    (Boolean(runningStartedAt) || Boolean(actualStart));
+  const hasSavedOpenSession = Boolean(actualStart) && !actualEnd;
+  const canStart = canEdit && !saving && !isCompleted && !runningStartedAt && !hasSavedOpenSession;
+  const canDone = canEdit && !saving && !isCompleted && Boolean(onDoneClick);
 
   useEffect(() => {
     setNow(Date.now());
@@ -208,6 +221,7 @@ export function DashboardTaskTimerAction({
     writeTaskTimerSnapshot(reportDate, taskId, snapshot);
   }, [actualEnd, actualStart, isHydrated, reportDate, runningStartedAt, status, storageKey, taskId, trackedMinutes, trackedSeconds]);
 
+
   useEffect(() => {
     autoStoppingRef.current = false;
   }, [reportDate, runningStartedAt]);
@@ -222,6 +236,30 @@ export function DashboardTaskTimerAction({
       ? calculateElapsedSecondsSince(actualStart, new Date(now))
       : null;
   const liveTrackedSeconds = Math.max(liveSessionSeconds, liveManualSeconds ?? 0);
+  const liveMinutes = String(Math.floor(liveTrackedSeconds / 60));
+  const snapshotSignature = `${status}|${actualStart}|${actualEnd}|${runningStartedAt}|${liveMinutes}|${liveTrackedSeconds}`;
+  const lastSentSignatureRef = useRef<string>("");
+
+  useEffect(() => {
+    if (!onSnapshotChange) {
+      return;
+    }
+
+    if (lastSentSignatureRef.current === snapshotSignature) {
+      return;
+    }
+
+    lastSentSignatureRef.current = snapshotSignature;
+
+    onSnapshotChange({
+      status,
+      trackedMinutes: liveMinutes,
+      trackedSeconds: String(liveTrackedSeconds),
+      actualStart,
+      actualEnd,
+      runningStartedAt,
+    });
+  }, [actualEnd, actualStart, liveMinutes, liveTrackedSeconds, onSnapshotChange, runningStartedAt, snapshotSignature, status]);
   const shouldShowResumeLabel = !runningStartedAt && trackedSecondsBase > 0;
   const startClockValue = toClockValue(actualStart);
   const endClockValue = toClockValue(actualEnd);
@@ -283,19 +321,6 @@ export function DashboardTaskTimerAction({
     return true;
   }
 
-  async function syncContinuation(action: "schedule_continuation" | "clear_continuation") {
-    const response = await fetch(`/api/dashboard/tasks/${taskId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-
-    if (!response.ok) {
-      return false;
-    }
-
-    return true;
-  }
 
   async function startTimer() {
     if (!canStart) {
@@ -340,35 +365,6 @@ export function DashboardTaskTimerAction({
     await persistUpdate(nextSnapshot, { refresh: false, successMessage: "Task timer started." });
   }
 
-  async function stopTimer() {
-    if (!canEnd) {
-      return;
-    }
-
-    const timestamp = new Date();
-    const timestampInput = toDateTimeInputValue(timestamp);
-    const nextTrackedMinutes = String(Math.floor(liveTrackedSeconds / 60));
-    const nextSnapshot: SharedTaskTimerSnapshot = {
-      status: "in_progress",
-      trackedMinutes: nextTrackedMinutes,
-      trackedSeconds: String(liveTrackedSeconds),
-      actualStart: actualStart || timestampInput,
-      actualEnd: timestampInput,
-      runningStartedAt: "",
-    };
-
-    setStatus("in_progress");
-    setTrackedMinutes(nextTrackedMinutes);
-    setTrackedSeconds(liveTrackedSeconds);
-    setActualStart(nextSnapshot.actualStart);
-    setActualEnd(timestampInput);
-    setRunningStartedAt("");
-
-    writeTaskTimerSnapshot(reportDate, taskId, nextSnapshot);
-    await syncContinuation("schedule_continuation");
-    await persistUpdate(nextSnapshot, { refresh: true, successMessage: "Task session saved." });
-  }
-
   async function stopTimerAt(timestampIso: string, successMessage: string) {
     const timestamp = parseDhakaDateTime(timestampIso);
     const timestampInput = toDateTimeInputValue(timestampIso);
@@ -396,33 +392,35 @@ export function DashboardTaskTimerAction({
     setRunningStartedAt("");
 
     writeTaskTimerSnapshot(reportDate, taskId, nextSnapshot);
-    await syncContinuation("schedule_continuation");
     await persistUpdate(nextSnapshot, { refresh: true, successMessage });
   }
 
-  async function pauseTimer() {
-    if (!canPause) {
+  async function handleDoneClick() {
+    if (!canDone || !onDoneClick) {
       return;
     }
 
-    const nextTrackedMinutes = String(Math.floor(liveTrackedSeconds / 60));
-    const nextSnapshot: SharedTaskTimerSnapshot = {
-      status: "in_progress",
-      trackedMinutes: nextTrackedMinutes,
-      trackedSeconds: String(liveTrackedSeconds),
-      actualStart,
-      actualEnd: "",
-      runningStartedAt: "",
-    };
+    if (runningStartedAt) {
+      const nextTrackedMinutes = String(Math.floor(liveTrackedSeconds / 60));
+      const timestampInput = toDateTimeInputValue(new Date());
+      const nextSnapshot: SharedTaskTimerSnapshot = {
+        status: "in_progress",
+        trackedMinutes: nextTrackedMinutes,
+        trackedSeconds: String(liveTrackedSeconds),
+        actualStart,
+        actualEnd: timestampInput,
+        runningStartedAt: "",
+      };
 
-    setStatus("in_progress");
-    setTrackedMinutes(nextTrackedMinutes);
-    setTrackedSeconds(liveTrackedSeconds);
-    setRunningStartedAt("");
+      setTrackedMinutes(nextTrackedMinutes);
+      setTrackedSeconds(liveTrackedSeconds);
+      setActualEnd(timestampInput);
+      setRunningStartedAt("");
+      writeTaskTimerSnapshot(reportDate, taskId, nextSnapshot);
+      await persistUpdate(nextSnapshot, { refresh: false });
+    }
 
-    writeTaskTimerSnapshot(reportDate, taskId, nextSnapshot);
-    await syncContinuation("schedule_continuation");
-    await persistUpdate(nextSnapshot, { refresh: false, successMessage: "Task paused." });
+    onDoneClick();
   }
 
   useEffect(() => {
@@ -453,71 +451,72 @@ export function DashboardTaskTimerAction({
     }
   }, [actualStart, liveTrackedSeconds, now, reportDate, runningStartedAt, saving, trackedSecondsBase]);
 
+  const buttonClass = compact
+    ? "button-force-white !text-white [&_svg]:!text-white h-7 min-w-[68px] justify-center rounded-full px-2.5 text-[11px] font-semibold"
+    : "button-force-white !text-white [&_svg]:!text-white h-8 min-w-[84px] justify-center rounded-full px-3 text-xs font-semibold";
+
   return (
-    <div className="flex min-w-[170px] flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className={compact ? "flex min-w-0 flex-col gap-1.5" : "flex min-w-[170px] flex-col gap-2"}>
+      <div className="flex flex-wrap items-center gap-1.5">
         <Button
-          className="button-force-white !text-white [&_svg]:!text-white h-8 min-w-[84px] justify-center rounded-full bg-[#19a46b] px-3 text-xs font-semibold hover:bg-[#14885a]"
+          className={`${buttonClass} bg-[#19a46b] hover:bg-[#14885a]`}
           disabled={!canStart}
           onClick={startTimer}
           type="button"
           variant="default"
         >
-          <Play className="h-3.5 w-3.5" />
-          {isCompleted ? "Start Again" : shouldShowResumeLabel ? "Resume" : "Start"}
+          <Play className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
+          {shouldShowResumeLabel ? "Resume" : "Start"}
         </Button>
         {isCompleted ? null : (
-          <>
-            <Button
-              className="button-force-white !text-white [&_svg]:!text-white h-8 min-w-[84px] justify-center rounded-full bg-amber-500 px-3 text-xs font-semibold hover:bg-amber-600 disabled:bg-amber-300 disabled:text-white disabled:opacity-100"
-              disabled={!canPause}
-              onClick={pauseTimer}
-              type="button"
-              variant="default"
-            >
-              <Pause className="h-3.5 w-3.5" />
-              Pause
-            </Button>
-            <Button
-              className="button-force-white !text-white [&_svg]:!text-white h-8 min-w-[84px] justify-center rounded-full bg-slate-800 px-3 text-xs font-semibold text-white hover:bg-slate-700 disabled:bg-slate-400 disabled:text-white disabled:opacity-100"
-              disabled={!canEnd}
-              onClick={stopTimer}
-              type="button"
-              variant="default"
-            >
-              <Square className="h-3.5 w-3.5" />
-              Complete
-            </Button>
-          </>
+          <Button
+            className={`${buttonClass} bg-[#4f5ef7] hover:bg-[#4453eb] disabled:bg-indigo-300 disabled:text-white disabled:opacity-100`}
+            disabled={!canDone}
+            onClick={handleDoneClick}
+            type="button"
+            variant="default"
+          >
+            Done
+          </Button>
         )}
+        {afterDoneSlot}
+        <span
+          className={`inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 font-semibold text-slate-600 ${
+            compact ? "px-2 py-1 text-[10px]" : "px-3 py-1.5 text-xs"
+          }`}
+        >
+          <Timer className={`text-[#4f5ef7] ${compact ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
+          {formatDuration(liveTrackedSeconds)}
+        </span>
       </div>
-      <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600">
-        <Timer className="h-3.5 w-3.5 text-[#4f5ef7]" />
-        {formatDuration(liveTrackedSeconds)}
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className={`flex items-center gap-1.5 ${compact ? "" : "grid gap-2 sm:grid-cols-2"}`}>
         <Input
+          className={compact ? "h-7 w-[88px] px-2 text-[11px]" : undefined}
           disabled={!canEdit || saving || Boolean(runningStartedAt)}
           onChange={(event) => patchClockTime("actualStart", event.target.value)}
           type="time"
           value={startClockValue}
         />
+        {!compact ? <span className="hidden sm:inline" /> : <span className="text-[10px] text-slate-300">–</span>}
         <Input
+          className={compact ? "h-7 w-[88px] px-2 text-[11px]" : undefined}
           disabled={!canEdit || saving || Boolean(runningStartedAt) || !actualStart}
           onChange={(event) => patchClockTime("actualEnd", event.target.value)}
           type="time"
           value={endClockValue}
         />
       </div>
-      <p className="text-[11px] font-medium text-slate-500">
-        {runningStartedAt
-          ? `Started ${formatTimeOnlyInDhaka(actualStart || runningStartedAt)}`
-          : actualStart
-            ? actualEnd
-              ? `Saved ${formatTimeOnlyInDhaka(actualStart)} - ${formatTimeOnlyInDhaka(actualEnd)}`
-              : `Manual time ${formatTimeOnlyInDhaka(actualStart)}`
-          : "Not started yet"}
-      </p>
+      {!compact ? (
+        <p className="text-[11px] font-medium text-slate-500">
+          {runningStartedAt
+            ? `Started ${formatTimeOnlyInDhaka(actualStart || runningStartedAt)}`
+            : actualStart
+              ? actualEnd
+                ? `Saved ${formatTimeOnlyInDhaka(actualStart)} - ${formatTimeOnlyInDhaka(actualEnd)}`
+                : `Manual time ${formatTimeOnlyInDhaka(actualStart)}`
+              : "Not started yet"}
+        </p>
+      ) : null}
     </div>
   );
 }

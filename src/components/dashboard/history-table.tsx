@@ -14,9 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { TaskManageControls } from "@/components/dashboard/task-manage-controls";
 import { getTaskTimerStorageKey } from "@/lib/task-timer-storage";
+import { getReadableTaskDescription } from "@/lib/report-summary";
+import { calculateTaskOvertimeMinutes, getTaskAutoStopLabel } from "@/lib/task-session-meta";
 import { extractContinuationMeta } from "@/lib/task-continuation";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDateTimeInDhaka, toDateOnly } from "@/lib/utils";
+import { formatDateTimeInDhaka, formatMinutes, toDateOnly } from "@/lib/utils";
 
 type HistoryItem = {
   id: string;
@@ -176,6 +178,14 @@ function formatMinutesAsHours(totalMinutes: number) {
   const hours = Math.floor(safeMinutes / 60);
   const minutes = safeMinutes % 60;
   return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+function getHistoryNote(task: HistoryItem) {
+  return task.updates[0]?.note?.trim() || getReadableTaskDescription(task.taskDescription) || "";
+}
+
+function formatTimeLabel(parts: ReturnType<typeof formatHistoryTimeParts>) {
+  return parts.isSet ? `${parts.time}${parts.meridiem ? ` ${parts.meridiem}` : ""}` : parts.time;
 }
 
 function getContinuationOverview(task: HistoryItem) {
@@ -532,7 +542,7 @@ export function HistoryTable({
     const reportDate = toDateOnly(task.planDate);
 
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="flex max-w-[260px] flex-wrap gap-2">
         <Button onClick={() => setSelectedTask(task)} size="sm" variant="secondary">
           View Details
         </Button>
@@ -598,14 +608,25 @@ export function HistoryTable({
                 const startedParts = formatHistoryTimeParts(task.updates[0]?.actualStart);
                 const endedParts = formatHistoryTimeParts(task.updates[0]?.actualEnd);
                 const continuationOverview = getContinuationOverview(task);
+                const visibleNote = getHistoryNote(task);
+                const overtimeMinutes = calculateTaskOvertimeMinutes({
+                  planDate: task.planDate,
+                  actualStart: task.updates[0]?.actualStart,
+                  actualEnd: task.updates[0]?.actualEnd,
+                });
+                const autoStopLabel = getTaskAutoStopLabel({
+                  planDate: task.planDate,
+                  status: latestStatus,
+                  actualEnd: task.updates[0]?.actualEnd,
+                });
 
                 return (
                   <TR
                     key={task.id}
                     className="align-top border-0"
                   >
-                    <TD className={`${recency.row} rounded-l-[22px] border border-r-0 px-4 py-5 text-[var(--foreground)]`} style={rowStyle}>
-                      <div className="space-y-3">
+                    <TD className={`${recency.row} rounded-l-[22px] border border-r-0 px-4 py-4 text-[var(--foreground)]`} style={rowStyle}>
+                      <div className="space-y-2">
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
                             {dateParts.weekday}
@@ -618,14 +639,41 @@ export function HistoryTable({
                         {recency.label ? <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] ${recency.chip}`}>{recency.label}</span> : null}
                       </div>
                     </TD>
-                    <TD className={`${recency.row} space-y-2 border-y px-4 py-5 text-[var(--foreground)]`} style={rowStyle}>
-                      <div className="space-y-2">
-                        <div className="text-lg font-bold leading-snug text-[var(--foreground)]">{task.taskTitle}</div>
-                        <p className="text-sm font-medium text-[var(--muted-foreground)]">
-                          Created for {dateParts.compact}
-                        </p>
+                    <TD className={`${recency.row} border-y px-4 py-4 text-[var(--foreground)]`} style={rowStyle}>
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="text-lg font-bold leading-snug text-[var(--foreground)]">{task.taskTitle}</div>
+                          <p className="text-sm font-medium text-[var(--muted-foreground)]">
+                            Created for {dateParts.compact}
+                          </p>
+                          {visibleNote ? (
+                            <p className="line-clamp-2 text-sm leading-6 text-[var(--muted-foreground)]">
+                              {visibleNote}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="grid gap-2 xl:min-w-[210px]">
+                          <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/35 px-3 py-2.5 dark:bg-white/5">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Start</span>
+                            <div className="text-right">
+                              <p className={`text-sm font-bold ${startedParts.isSet ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}>
+                                {formatTimeLabel(startedParts)}
+                              </p>
+                              <p className="text-xs text-[var(--muted-foreground)]">{startedParts.date}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/35 px-3 py-2.5 dark:bg-white/5">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">End</span>
+                            <div className="text-right">
+                              <p className={`text-sm font-bold ${endedParts.isSet ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}>
+                                {formatTimeLabel(endedParts)}
+                              </p>
+                              <p className="text-xs text-[var(--muted-foreground)]">{endedParts.date}</p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span className="rounded-full border px-2.5 py-1 text-xs font-semibold text-[var(--foreground)]" style={themeStyles.departmentChip}>
                           {task.department.name}
                         </span>
@@ -633,69 +681,24 @@ export function HistoryTable({
                         <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getTrackedTone(task.updates[0]?.trackedMinutes ?? 0)}`}>
                           {formatTrackedMinutes(task.updates[0]?.trackedMinutes ?? 0)}
                         </span>
-                      </div>
-                      {extractContinuationMeta(task.taskDescription) ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="purple">Continued</Badge>
-                          <span className="text-sm font-medium text-[var(--muted-foreground)]">
-                            Running from {extractContinuationMeta(task.taskDescription)?.sourceDate}
+                        {continuationOverview ? (
+                          <span className="inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+                            {continuationOverview.totalDays} work day{continuationOverview.totalDays > 1 ? "s" : ""}
                           </span>
-                        </div>
-                      ) : null}
-                      {continuationOverview ? (
-                        <div className="grid gap-2 pt-1 sm:grid-cols-3">
-                          <div className="rounded-2xl border border-sky-200/70 bg-white/60 px-3 py-2 text-sm dark:border-sky-300/20 dark:bg-white/5">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-200">This Day</p>
-                            <p className="mt-1 font-bold text-[var(--foreground)]">
-                              {formatMinutesAsHours(continuationOverview.currentTrackedMinutes)}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl border border-emerald-200/70 bg-white/60 px-3 py-2 text-sm dark:border-emerald-300/20 dark:bg-white/5">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-200">Overall</p>
-                            <p className="mt-1 font-bold text-[var(--foreground)]">
-                              {formatMinutesAsHours(continuationOverview.overallTrackedMinutes)}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl border border-violet-200/70 bg-white/60 px-3 py-2 text-sm dark:border-violet-300/20 dark:bg-white/5">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-200">Work Days</p>
-                            <p className="mt-1 font-bold text-[var(--foreground)]">
-                              {continuationOverview.totalDays} day{continuationOverview.totalDays > 1 ? "s" : ""}
-                            </p>
-                          </div>
-                        </div>
-                      ) : null}
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        <div className="rounded-2xl border border-white/10 bg-white/35 px-4 py-3 dark:bg-white/5">
-                          <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Started</span>
-                          <div className="mt-2 flex items-end gap-2">
-                            <p className={`text-xl font-black leading-none ${startedParts.isSet ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}>
-                              {startedParts.time}
-                            </p>
-                            {startedParts.meridiem ? (
-                              <span className="mb-0.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-300">
-                                {startedParts.meridiem}
-                              </span>
-                            ) : null}
-                          </div>
-                          <p className="mt-1 text-sm font-medium text-[var(--muted-foreground)]">{startedParts.date}</p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/35 px-4 py-3 dark:bg-white/5">
-                          <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Ended</span>
-                          <div className="mt-2 flex items-end gap-2">
-                            <p className={`text-xl font-black leading-none ${endedParts.isSet ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}>
-                              {endedParts.time}
-                            </p>
-                            {endedParts.meridiem ? (
-                              <span className="mb-0.5 rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-300">
-                                {endedParts.meridiem}
-                              </span>
-                            ) : null}
-                          </div>
-                          <p className="mt-1 text-sm font-medium text-[var(--muted-foreground)]">{endedParts.date}</p>
-                        </div>
+                        ) : null}
+                        {overtimeMinutes > 0 ? (
+                          <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                            Overtime {formatMinutes(overtimeMinutes)}
+                          </span>
+                        ) : null}
+                        {autoStopLabel ? (
+                          <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                            {autoStopLabel}
+                          </span>
+                        ) : null}
                       </div>
                     </TD>
-                    <TD className={`${recency.row} min-w-[220px] rounded-r-[22px] border border-l-0 px-4 py-5 text-[var(--foreground)]`} style={rowStyle}>
+                    <TD className={`${recency.row} min-w-[180px] rounded-r-[22px] border border-l-0 px-4 py-4 text-[var(--foreground)] align-top`} style={rowStyle}>
                       {renderAction(task)}
                     </TD>
                   </TR>
@@ -724,48 +727,70 @@ export function HistoryTable({
               </Button>
             </div>
             <div className="space-y-5 px-6 py-6">
-              <div className="grid gap-4 md:grid-cols-4">
-                <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Status</p>
-                  <div className="mt-2">
-                    <Badge variant={statusVariant(selectedTask.updates[0]?.status)}>
-                      {selectedTask.updates[0]?.status ?? "planned"}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Tracked</p>
-                  <p className="mt-2 text-lg font-semibold text-white">{selectedTask.updates[0]?.trackedMinutes ?? 0} min</p>
-                </div>
-                <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Started</p>
-                  <p className="mt-2 text-xl font-bold text-white">{formatHistoryTimeParts(selectedTask.updates[0]?.actualStart).time}</p>
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">{formatHistoryTimeParts(selectedTask.updates[0]?.actualStart).date}</p>
-                </div>
-                <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Ended</p>
-                  <p className="mt-2 text-xl font-bold text-white">{formatHistoryTimeParts(selectedTask.updates[0]?.actualEnd).time}</p>
-                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">{formatHistoryTimeParts(selectedTask.updates[0]?.actualEnd).date}</p>
-                </div>
-              </div>
+              {(() => {
+                const selectedOvertimeMinutes = calculateTaskOvertimeMinutes({
+                  planDate: selectedTask.planDate,
+                  actualStart: selectedTask.updates[0]?.actualStart,
+                  actualEnd: selectedTask.updates[0]?.actualEnd,
+                });
+                const selectedAutoStopLabel = getTaskAutoStopLabel({
+                  planDate: selectedTask.planDate,
+                  status: selectedTask.updates[0]?.status,
+                  actualEnd: selectedTask.updates[0]?.actualEnd,
+                });
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Completion</p>
-                  <p className="mt-2 text-lg font-semibold text-white">{selectedTask.updates[0]?.completionPercent ?? 0}%</p>
-                </div>
-                <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Difficulty</p>
-                  <p className="mt-2 text-lg font-semibold text-white">{selectedTask.updates[0]?.difficultyLevel || "Not set"}</p>
-                </div>
-              </div>
+                return (
+                  <>
+                    <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={statusVariant(selectedTask.updates[0]?.status)}>
+                          {selectedTask.updates[0]?.status ?? "planned"}
+                        </Badge>
+                        <span className="rounded-full bg-white/70 px-3 py-1 text-sm font-semibold text-[var(--foreground)]">
+                          {formatMinutes(selectedTask.updates[0]?.trackedMinutes ?? 0)}
+                        </span>
+                        {selectedOvertimeMinutes > 0 ? (
+                          <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                            Overtime {formatMinutes(selectedOvertimeMinutes)}
+                          </span>
+                        ) : null}
+                        {selectedAutoStopLabel ? (
+                          <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+                            {selectedAutoStopLabel}
+                          </span>
+                        ) : null}
+                      </div>
+                      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <dt className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Started</dt>
+                          <dd className="mt-1 text-base font-semibold text-[var(--foreground)]">{formatTimeLabel(formatHistoryTimeParts(selectedTask.updates[0]?.actualStart))}</dd>
+                          <dd className="text-sm text-[var(--muted-foreground)]">{formatHistoryTimeParts(selectedTask.updates[0]?.actualStart).date}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Ended</dt>
+                          <dd className="mt-1 text-base font-semibold text-[var(--foreground)]">{formatTimeLabel(formatHistoryTimeParts(selectedTask.updates[0]?.actualEnd))}</dd>
+                          <dd className="text-sm text-[var(--muted-foreground)]">{formatHistoryTimeParts(selectedTask.updates[0]?.actualEnd).date}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Completion</dt>
+                          <dd className="mt-1 text-base font-semibold text-[var(--foreground)]">{selectedTask.updates[0]?.completionPercent ?? 0}%</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Difficulty</dt>
+                          <dd className="mt-1 text-base font-semibold text-[var(--foreground)]">{selectedTask.updates[0]?.difficultyLevel || "Not set"}</dd>
+                        </div>
+                      </dl>
+                    </div>
 
-              <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Work Note</p>
-                <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[var(--foreground)] dark:text-white/90">
-                  {selectedTask.updates[0]?.note || "No extra note added for this report."}
-                </p>
-              </div>
+                    <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Reminder / Note</p>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[var(--foreground)] dark:text-white/90">
+                        {getHistoryNote(selectedTask) || "No extra note added for this task."}
+                      </p>
+                    </div>
+                  </>
+                );
+              })()}
 
               {extractContinuationMeta(selectedTask.taskDescription) ? (
                 <div className="rounded-2xl border border-violet-300/40 bg-violet-50 p-4 dark:border-violet-400/30 dark:bg-violet-500/10">
@@ -779,46 +804,30 @@ export function HistoryTable({
 
                     return (
                       <div className="mt-3 space-y-4 text-sm text-slate-700 dark:text-white/90">
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                          <div className="rounded-2xl border border-violet-200 bg-white/80 px-3 py-3 dark:border-violet-300/20 dark:bg-slate-950/20">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-200">Previous Day</p>
-                            <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
-                              {continuationOverview.previousDayLog
-                                ? formatMinutesAsHours(continuationOverview.previousDayLog.trackedMinutes)
-                                : "0h 00m"}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500 dark:text-white/70">
-                              {continuationOverview.previousDayLog?.date ?? "No saved day log"}
-                            </p>
+                        <dl className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-200">Started From</dt>
+                            <dd className="mt-1 font-semibold text-slate-900 dark:text-white">{continuationOverview.sourceDate || "Previous day"}</dd>
                           </div>
-                          <div className="rounded-2xl border border-sky-200 bg-white/80 px-3 py-3 dark:border-sky-300/20 dark:bg-slate-950/20">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-200">Current Day</p>
-                            <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
-                              {formatMinutesAsHours(continuationOverview.currentTrackedMinutes)}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500 dark:text-white/70">
-                              Progress {continuationOverview.currentProgress}%
-                            </p>
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-200">Work Days</dt>
+                            <dd className="mt-1 font-semibold text-slate-900 dark:text-white">
+                              {continuationOverview.totalDays} day{continuationOverview.totalDays > 1 ? "s" : ""}
+                            </dd>
                           </div>
-                          <div className="rounded-2xl border border-emerald-200 bg-white/80 px-3 py-3 dark:border-emerald-300/20 dark:bg-slate-950/20">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-200">Overall Work</p>
-                            <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-200">Current Day</dt>
+                            <dd className="mt-1 font-semibold text-slate-900 dark:text-white">
+                              {formatMinutesAsHours(continuationOverview.currentTrackedMinutes)} • {continuationOverview.currentProgress}%
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-200">Overall Work</dt>
+                            <dd className="mt-1 font-semibold text-slate-900 dark:text-white">
                               {formatMinutesAsHours(continuationOverview.overallTrackedMinutes)}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500 dark:text-white/70">
-                              {continuationOverview.totalDays} active day{continuationOverview.totalDays > 1 ? "s" : ""}
-                            </p>
+                            </dd>
                           </div>
-                          <div className="rounded-2xl border border-amber-200 bg-white/80 px-3 py-3 dark:border-amber-300/20 dark:bg-slate-950/20">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-200">Started From</p>
-                            <p className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
-                              {continuationOverview.sourceDate || "Previous day"}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500 dark:text-white/70">
-                              Latest progress {continuationOverview.currentProgress}%
-                            </p>
-                          </div>
-                        </div>
+                        </dl>
                         {continuationOverview.lastNote ? (
                           <div className="rounded-2xl border border-violet-200 bg-white/70 px-3 py-3 text-sm text-slate-700 dark:border-violet-300/20 dark:bg-slate-950/20 dark:text-white/85">
                             <span className="font-semibold text-violet-700 dark:text-violet-200">Last Note:</span>{" "}

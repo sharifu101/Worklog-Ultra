@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 import { redirect } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +14,6 @@ import { requireUser } from "@/lib/auth/server";
 import { roleUiTitle } from "@/lib/auth/roles";
 import { getDepartments, getTeamData } from "@/lib/worklog";
 import { formatCurrency, formatDateTimeInDhaka, formatHours, formatMinutes } from "@/lib/utils";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +41,6 @@ export default async function TeamPage() {
   const canViewComp = user.role === "manager" || user.role === "admin";
   const canManageUsers = user.role === "manager" || user.role === "admin";
   const canManageComp = user.role === "manager" || user.role === "admin";
-  const tableColumnCount = 5 + (canViewComp ? 6 : 0);
   const sortedSummaries = [...employeeSummaries].sort(
     (a, b) => b.workValue - a.workValue || b.trackedMinutes - a.trackedMinutes,
   );
@@ -76,236 +73,109 @@ export default async function TeamPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">Daily Pay Baseline</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(totalDailyBaseline)}</p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{formatCurrency(totalDailyBaseline)}</p>
           </div>
           <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">Weekly Pay Baseline</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(totalWeeklyBaseline)}</p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{formatCurrency(totalWeeklyBaseline)}</p>
           </div>
           <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">Today's Work Value</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(totalTrackedValue)}</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">Today&apos;s Work Value</p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{formatCurrency(totalTrackedValue)}</p>
           </div>
           <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-[var(--muted-foreground)]">Tracked Time Today</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{formatMinutes(totalTrackedMinutes)}</p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{formatMinutes(totalTrackedMinutes)}</p>
           </div>
         </div>
 
-        <div className="space-y-4 lg:hidden">
+        <div className="overflow-hidden rounded-[28px] border border-[var(--panel-border)] bg-[var(--panel-muted)]">
           {(sortedSummaries ?? []).map((employee) => (
             <div
-              className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] p-4"
-              key={`mobile-${employee.id}`}
+              className="border-b border-[var(--panel-border)] px-4 py-4 last:border-b-0"
+              key={employee.id}
             >
-              <div className="flex items-start gap-3">
-                <Avatar className="h-11 w-11 border-white/10">
-                  {employee.avatar_url ? <AvatarImage alt={employee.name} src={employee.avatar_url} /> : null}
-                  <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
-                </Avatar>
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold leading-tight text-white">{employee.name}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                    <span className="text-[var(--muted-foreground)]">{employee.departmentName}</span>
-                    <span className="text-[var(--muted-foreground)]">|</span>
-                    <span className="text-[var(--muted-foreground)]">{roleUiTitle(employee.role)}</span>
-                    <Badge variant={employee.isActive ? "success" : "secondary"}>
-                      {employee.isActive ? "Active" : "Inactive"}
-                    </Badge>
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-11 w-11 border-white/10">
+                      {employee.avatar_url ? <AvatarImage alt={employee.name} src={employee.avatar_url} /> : null}
+                      <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold leading-tight text-[var(--foreground)]">{employee.name}</p>
+                        <Badge variant={employee.isActive ? "success" : "secondary"}>
+                          {employee.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                        <Badge>{roleUiTitle(employee.role)}</Badge>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--muted-foreground)]">
+                        <span>{employee.departmentName}</span>
+                        <span>{employee.tasksPlanned} planned</span>
+                        <span>{employee.completedTasks} done</span>
+                        <span>{formatMinutes(employee.trackedMinutes)} tracked</span>
+                        <span>Started {formatDateTimeInDhaka(employee.firstStart)}</span>
+                        <span>Ended {formatDateTimeInDhaka(employee.lastEnd)}</span>
+                        {canViewComp ? <span>{formatCurrency(employee.workValue)} value</span> : null}
+                      </div>
+                      {canViewComp ? (
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[var(--muted-foreground)]">
+                          <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                            {formatCurrency(employee.hourlyRate)}/hr
+                          </span>
+                          <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                            {formatCurrency(employee.dailyRate)}/day
+                          </span>
+                          <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                            {formatCurrency(employee.weeklyRate)}/week
+                          </span>
+                          <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                            {formatCurrency(employee.monthlySalary)}/month
+                          </span>
+                          <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                            OT {formatHours(employee.overtimeMinutes)}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                    {employee.completedTasks}/{employee.tasksPlanned} completed
-                  </p>
                 </div>
-              </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Tasks</p>
-                  <p className="mt-1 text-white">{employee.tasksPlanned} planned</p>
-                  <Badge className="mt-2" variant={employee.completedTasks === employee.tasksPlanned ? "success" : "purple"}>
-                    {employee.completedTasks} done
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Tracked</p>
-                  <p className="mt-1 text-white">{formatMinutes(employee.trackedMinutes)}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Started</p>
-                  <p className="mt-1 text-white">{formatDateTimeInDhaka(employee.firstStart)}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Ended</p>
-                  <p className="mt-1 text-white">{formatDateTimeInDhaka(employee.lastEnd)}</p>
-                </div>
-                {canViewComp ? (
-                  <>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Hourly</p>
-                      <p className="mt-1 text-white">{formatCurrency(employee.hourlyRate)}/hr</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Daily</p>
-                      <p className="mt-1 text-white">{formatCurrency(employee.dailyRate)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Weekly</p>
-                      <p className="mt-1 text-white">{formatCurrency(employee.weeklyRate)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Monthly</p>
-                      <p className="mt-1 text-white">{formatCurrency(employee.monthlySalary)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Overtime</p>
-                      <p className="mt-1 text-white">{formatHours(employee.overtimeMinutes)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Value</p>
-                      <p className="mt-1 font-semibold text-white">{formatCurrency(employee.workValue)}</p>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-
-              {canManageUsers ? (
-                <div className="mt-4 space-y-3 border-t border-[var(--panel-border)] pt-4">
-                  <div className="flex flex-wrap gap-2">
+                {canManageUsers ? (
+                  <div className="flex flex-wrap items-center gap-2 xl:max-w-[36%] xl:justify-end">
                     {employee.role === "manager" && user.role === "manager" ? null : (
                       <UserStatusToggle isActive={employee.isActive} userId={employee.id} userName={employee.name} />
                     )}
+                    {user.role === "manager" && employee.role === "employee" ? (
+                      <UserRoleDepartmentEditor
+                        accessOptions={managerAccessOptions}
+                        allowAccessEdit
+                        allowRoleEdit={false}
+                        compact
+                        layout="inline"
+                        departments={departmentOptions}
+                        initialDepartmentId={employee.departmentId}
+                        initialExtraAccess={employee.extraAccess ?? []}
+                        initialRole={employee.role}
+                        userId={employee.id}
+                        userName={employee.name}
+                      />
+                    ) : null}
+                    {canManageComp && (user.role === "admin" || employee.role !== "admin") ? (
+                      <CompensationEditor
+                        compact
+                        layout="inline"
+                        monthlySalary={employee.monthlySalary}
+                        userId={employee.id}
+                        userName={employee.name}
+                      />
+                    ) : null}
                   </div>
-                  {user.role === "manager" && employee.role === "employee" ? (
-                    <UserRoleDepartmentEditor
-                      accessOptions={managerAccessOptions}
-                      allowAccessEdit
-                      allowRoleEdit={false}
-                      compact
-                      departments={departmentOptions}
-                      initialDepartmentId={employee.departmentId}
-                      initialExtraAccess={employee.extraAccess ?? []}
-                      initialRole={employee.role}
-                      userId={employee.id}
-                      userName={employee.name}
-                    />
-                  ) : null}
-                  {canManageComp && (user.role === "admin" || employee.role !== "admin") ? (
-                    <CompensationEditor compact monthlySalary={employee.monthlySalary} userId={employee.id} userName={employee.name} />
-                  ) : null}
-                </div>
-              ) : null}
+                ) : null}
+              </div>
             </div>
           ))}
-        </div>
-
-        <div className="hidden overflow-x-auto lg:block">
-          <Table>
-            <THead>
-              <TR>
-                <TH>Employee</TH>
-                <TH>Tasks Today</TH>
-                <TH>Started</TH>
-                <TH>Ended</TH>
-                <TH>Tracked Today</TH>
-                {canViewComp ? <TH>Hourly Rate</TH> : null}
-                {canViewComp ? <TH>Daily Salary</TH> : null}
-                {canViewComp ? <TH>Weekly Salary</TH> : null}
-                {canViewComp ? <TH>Monthly Salary</TH> : null}
-                {canViewComp ? <TH>Overtime</TH> : null}
-                {canViewComp ? <TH>Today's Work Value</TH> : null}
-              </TR>
-            </THead>
-            <TBody>
-              {(sortedSummaries ?? []).map((employee) => (
-                <Fragment key={employee.id}>
-                  <TR className="align-top">
-                    <TD>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-11 w-11 border-white/10">
-                          {employee.avatar_url ? <AvatarImage alt={employee.name} src={employee.avatar_url} /> : null}
-                          <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-semibold text-white">{employee.name}</p>
-                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                            <span className="text-[var(--muted-foreground)]">{employee.departmentName}</span>
-                            <span className="text-[var(--muted-foreground)]">|</span>
-                            <span className="text-[var(--muted-foreground)]">{roleUiTitle(employee.role)}</span>
-                            <Badge variant={employee.isActive ? "success" : "secondary"}>
-                              {employee.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-[var(--muted-foreground)]">
-                            {employee.completedTasks}/{employee.tasksPlanned} completed
-                          </p>
-                        </div>
-                      </div>
-                    </TD>
-                    <TD>
-                      <div className="space-y-1">
-                        <div className="text-white">{employee.tasksPlanned} planned</div>
-                        <Badge variant={employee.completedTasks === employee.tasksPlanned ? "success" : "purple"}>
-                          {employee.completedTasks} done
-                        </Badge>
-                      </div>
-                    </TD>
-                    <TD>{formatDateTimeInDhaka(employee.firstStart)}</TD>
-                    <TD>{formatDateTimeInDhaka(employee.lastEnd)}</TD>
-                    <TD>{formatMinutes(employee.trackedMinutes)}</TD>
-                    {canViewComp ? <TD>{formatCurrency(employee.hourlyRate)}/hr</TD> : null}
-                    {canViewComp ? <TD>{formatCurrency(employee.dailyRate)}</TD> : null}
-                    {canViewComp ? <TD>{formatCurrency(employee.weeklyRate)}</TD> : null}
-                    {canViewComp ? <TD>{formatCurrency(employee.monthlySalary)}</TD> : null}
-                    {canViewComp ? <TD>{formatHours(employee.overtimeMinutes)}</TD> : null}
-                    {canViewComp ? (
-                      <TD>
-                        <div className="space-y-1">
-                          <div className="font-semibold text-white">{formatCurrency(employee.workValue)}</div>
-                          <div className="text-xs text-[var(--muted-foreground)]">for {formatMinutes(employee.trackedMinutes)}</div>
-                        </div>
-                      </TD>
-                    ) : null}
-                  </TR>
-                  {canManageUsers ? (
-                    <TR className="border-b border-[var(--panel-border)]">
-                      <TD className="pt-0" colSpan={tableColumnCount}>
-                        <div className="ml-[56px] flex flex-wrap items-center gap-2 pb-4">
-                          {employee.role === "manager" && user.role === "manager" ? null : (
-                            <UserStatusToggle isActive={employee.isActive} userId={employee.id} userName={employee.name} />
-                          )}
-                          {user.role === "manager" && employee.role === "employee" ? (
-                            <UserRoleDepartmentEditor
-                              accessOptions={managerAccessOptions}
-                              allowAccessEdit
-                              allowRoleEdit={false}
-                              compact
-                              layout="inline"
-                              departments={departmentOptions}
-                              initialDepartmentId={employee.departmentId}
-                              initialExtraAccess={employee.extraAccess ?? []}
-                              initialRole={employee.role}
-                              userId={employee.id}
-                              userName={employee.name}
-                            />
-                          ) : null}
-                          {canManageComp && (user.role === "admin" || employee.role !== "admin") ? (
-                            <CompensationEditor
-                              compact
-                              layout="inline"
-                              monthlySalary={employee.monthlySalary}
-                              userId={employee.id}
-                              userName={employee.name}
-                            />
-                          ) : null}
-                        </div>
-                      </TD>
-                    </TR>
-                  ) : null}
-                </Fragment>
-              ))}
-            </TBody>
-          </Table>
         </div>
       </CardContent>
     </Card>
