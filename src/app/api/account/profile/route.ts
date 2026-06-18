@@ -5,6 +5,19 @@ import { roleNeedsDepartment } from "@/lib/auth/access";
 import { db } from "@/lib/db";
 import { updateProfileSchema } from "@/lib/validators/profile";
 
+function sanitizeAvatarUrl(avatarUrl: string | null | undefined) {
+  if (typeof avatarUrl !== "string") {
+    return "";
+  }
+
+  const nextAvatarUrl = avatarUrl.trim();
+  if (!nextAvatarUrl) {
+    return "";
+  }
+
+  return nextAvatarUrl.startsWith("/uploads/avatars/") ? nextAvatarUrl : "";
+}
+
 export async function POST(request: NextRequest) {
   const user = await requireUser();
   const body = await request.json();
@@ -16,10 +29,7 @@ export async function POST(request: NextRequest) {
 
   const payload = parsed.data;
   const departmentId = payload.departmentId || null;
-  const nextAvatarUrl =
-    typeof payload.avatar_url === "string" && payload.avatar_url.trim().startsWith("/uploads/avatars/")
-      ? payload.avatar_url.trim()
-      : user.avatarUrl;
+  const nextAvatarUrl = sanitizeAvatarUrl(payload.avatar_url ?? null) || user.avatarUrl || "";
 
   if (roleNeedsDepartment(user.role) && !departmentId) {
     return apiError("Department is required for this account.");
@@ -53,9 +63,11 @@ export async function POST(request: NextRequest) {
     message: "Profile updated successfully.",
     user: {
       name: updatedUser.name,
+      avatarUrl: updatedUser.avatarUrl,
       avatar_url: updatedUser.avatarUrl,
       designation: updatedUser.designation,
       department: updatedUser.department?.name ?? null,
     },
+    avatarUrl: updatedUser.avatarUrl,
   });
 }

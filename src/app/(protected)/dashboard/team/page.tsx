@@ -90,92 +90,96 @@ export default async function TeamPage() {
         </div>
 
         <div className="overflow-hidden rounded-[28px] border border-[var(--panel-border)] bg-[var(--panel-muted)]">
-          {(sortedSummaries ?? []).map((employee) => (
-            <div
-              className="border-b border-[var(--panel-border)] px-4 py-4 last:border-b-0"
-              key={employee.id}
-            >
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start gap-3">
-                    <Avatar className="h-11 w-11 border-white/10">
-                      {employee.avatar_url ? <AvatarImage alt={employee.name} src={employee.avatar_url} /> : null}
-                      <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold leading-tight text-[var(--foreground)]">{employee.name}</p>
-                        <Badge variant={employee.isActive ? "success" : "secondary"}>
-                          {employee.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                        <Badge>{roleUiTitle(employee.role)}</Badge>
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--muted-foreground)]">
-                        <span>{employee.departmentName}</span>
-                        <span>{employee.tasksPlanned} planned</span>
-                        <span>{employee.completedTasks} done</span>
-                        <span>{formatMinutes(employee.trackedMinutes)} tracked</span>
-                        <span>Started {formatDateTimeInDhaka(employee.firstStart)}</span>
-                        <span>Ended {formatDateTimeInDhaka(employee.lastEnd)}</span>
-                        {canViewComp ? <span>{formatCurrency(employee.workValue)} value</span> : null}
-                      </div>
-                      {canViewComp ? (
-                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[var(--muted-foreground)]">
-                          <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
-                            {formatCurrency(employee.hourlyRate)}/hr
-                          </span>
-                          <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
-                            {formatCurrency(employee.dailyRate)}/day
-                          </span>
-                          <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
-                            {formatCurrency(employee.weeklyRate)}/week
-                          </span>
-                          <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
-                            {formatCurrency(employee.monthlySalary)}/month
-                          </span>
-                          <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
-                            OT {formatHours(employee.overtimeMinutes)}
-                          </span>
+          {(sortedSummaries ?? []).map((employee) => {
+            const employeeAvatarUrl = employee.avatarUrl ?? employee.avatar_url ?? "";
+
+            return (
+              <div
+                className="border-b border-[var(--panel-border)] px-4 py-4 last:border-b-0"
+                key={employee.id}
+              >
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start gap-3">
+                      <Avatar className="h-11 w-11 border-white/10">
+                        {employeeAvatarUrl ? <AvatarImage alt={employee.name} src={employeeAvatarUrl} /> : null}
+                        <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold leading-tight text-[var(--foreground)]">{employee.name}</p>
+                          <Badge variant={employee.isActive ? "success" : "secondary"}>
+                            {employee.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                          <Badge>{roleUiTitle(employee.role)}</Badge>
                         </div>
-                      ) : null}
+                        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--muted-foreground)]">
+                          <span>{employee.departmentName}</span>
+                          <span>{employee.tasksPlanned} planned</span>
+                          <span>{employee.completedTasks} done</span>
+                          <span>{formatMinutes(employee.trackedMinutes)} tracked</span>
+                          <span>Started {formatDateTimeInDhaka(employee.firstStart)}</span>
+                          <span>Ended {formatDateTimeInDhaka(employee.lastEnd)}</span>
+                          {canViewComp ? <span>{formatCurrency(employee.workValue)} value</span> : null}
+                        </div>
+                        {canViewComp ? (
+                          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[var(--muted-foreground)]">
+                            <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                              {formatCurrency(employee.hourlyRate)}/hr
+                            </span>
+                            <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                              {formatCurrency(employee.dailyRate)}/day
+                            </span>
+                            <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                              {formatCurrency(employee.weeklyRate)}/week
+                            </span>
+                            <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                              {formatCurrency(employee.monthlySalary)}/month
+                            </span>
+                            <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
+                              OT {formatHours(employee.overtimeMinutes)}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {canManageUsers ? (
-                  <div className="flex flex-wrap items-center gap-2 xl:max-w-[36%] xl:justify-end">
-                    {employee.role === "manager" && user.role === "manager" ? null : (
-                      <UserStatusToggle isActive={employee.isActive} userId={employee.id} userName={employee.name} />
-                    )}
-                    {user.role === "manager" && employee.role === "employee" ? (
-                      <UserRoleDepartmentEditor
-                        accessOptions={managerAccessOptions}
-                        allowAccessEdit
-                        allowRoleEdit={false}
-                        compact
-                        layout="inline"
-                        departments={departmentOptions}
-                        initialDepartmentId={employee.departmentId}
-                        initialExtraAccess={employee.extraAccess ?? []}
-                        initialRole={employee.role}
-                        userId={employee.id}
-                        userName={employee.name}
-                      />
-                    ) : null}
-                    {canManageComp && (user.role === "admin" || employee.role !== "admin") ? (
-                      <CompensationEditor
-                        compact
-                        layout="inline"
-                        monthlySalary={employee.monthlySalary}
-                        userId={employee.id}
-                        userName={employee.name}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
+                  {canManageUsers ? (
+                    <div className="flex flex-wrap items-center gap-2 xl:max-w-[36%] xl:justify-end">
+                      {employee.role === "manager" && user.role === "manager" ? null : (
+                        <UserStatusToggle isActive={employee.isActive} userId={employee.id} userName={employee.name} />
+                      )}
+                      {user.role === "manager" && employee.role === "employee" ? (
+                        <UserRoleDepartmentEditor
+                          accessOptions={managerAccessOptions}
+                          allowAccessEdit
+                          allowRoleEdit={false}
+                          compact
+                          layout="inline"
+                          departments={departmentOptions}
+                          initialDepartmentId={employee.departmentId}
+                          initialExtraAccess={employee.extraAccess ?? []}
+                          initialRole={employee.role}
+                          userId={employee.id}
+                          userName={employee.name}
+                        />
+                      ) : null}
+                      {canManageComp && (user.role === "admin" || employee.role !== "admin") ? (
+                        <CompensationEditor
+                          compact
+                          layout="inline"
+                          monthlySalary={employee.monthlySalary}
+                          userId={employee.id}
+                          userName={employee.name}
+                        />
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </CardContent>
     </Card>

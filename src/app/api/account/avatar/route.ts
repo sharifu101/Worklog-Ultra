@@ -8,7 +8,22 @@ import { db } from "@/lib/db";
 export const runtime = "nodejs";
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const ALLOWED_TYPES_TO_EXTENSION: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+};
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
+
+function resolveAvatarExtension(file: File) {
+  const providedExtension = path.extname(file.name || "").toLowerCase();
+  if (providedExtension && providedExtension !== ".") {
+    return providedExtension;
+  }
+
+  return ALLOWED_TYPES_TO_EXTENSION[file.type];
+}
 
 export async function POST(request: NextRequest) {
   const user = await requireUser();
@@ -28,16 +43,21 @@ export async function POST(request: NextRequest) {
     return apiError("Profile photo must be 4MB or smaller.");
   }
 
-  const extension = path.extname(file.name || "").toLowerCase() || `.${file.type.split("/")[1]}`;
+  const extension = resolveAvatarExtension(file);
+  if (!extension || extension.length > 8) {
+    return apiError("Invalid profile photo file extension.");
+  }
+
+  const avatarTimestamp = Date.now();
   const uploadsDir = path.join(process.cwd(), "public", "uploads", "avatars");
-  const fileName = `${user.id}-${Date.now()}${extension}`;
+  const fileName = `${user.id}-${avatarTimestamp}${extension}`;
   const destination = path.join(uploadsDir, fileName);
   const buffer = Buffer.from(await file.arrayBuffer());
 
   await mkdir(uploadsDir, { recursive: true });
   await writeFile(destination, buffer);
 
-  const avatarUrl = `/uploads/avatars/${fileName}`;
+  const avatarUrl = `/uploads/avatars/${fileName}?v=${avatarTimestamp}`;
   const updatedUser = await db.user.update({
     where: { id: user.id },
     data: { avatarUrl },
@@ -61,10 +81,12 @@ export async function POST(request: NextRequest) {
 
   return apiSuccess({
     message: "Profile photo uploaded successfully.",
+    avatarUrl,
     avatar_url: avatarUrl,
     user: {
       ...updatedUser,
-      avatar_url: updatedUser.avatarUrl,
+      avatarUrl,
+      avatar_url: avatarUrl,
     },
   });
 }
