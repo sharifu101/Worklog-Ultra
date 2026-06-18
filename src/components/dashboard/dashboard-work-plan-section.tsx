@@ -505,8 +505,9 @@ export function DashboardWorkPlanSection({
                   data-dashboard-row
                   key={task.id}
                 >
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto] xl:items-start">
-                    <div className="min-w-0">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="break-words text-sm font-semibold leading-6 text-[var(--foreground)]">{task.taskTitle}</h3>
                         {followUpMeta ? (
@@ -520,57 +521,60 @@ export function DashboardWorkPlanSection({
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-1 text-xs text-[var(--muted-foreground)]">{task.departmentName}</p>
+                        <p className="text-xs text-[var(--muted-foreground)]">{task.departmentName}</p>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex min-w-[72px] items-center justify-center rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${getPriorityTone(task.priority)}`}
+                          >
+                            {formatPriority(task.priority)}
+                          </span>
+                          <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${statusMeta.chip}`}>
+                            {statusMeta.label}
+                          </span>
+                          <span className="text-xs font-medium text-slate-500">{formatPlannedTime(task)}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-start sm:gap-1 xl:max-w-max xl:shrink-0 xl:justify-end">
+                        <TaskTimerActionWrapper
+                          task={task}
+                          canEdit={canEdit}
+                          afterDoneSlot={
+                            <TaskManageControls
+                              compact
+                              hideDoneAction
+                              task={{
+                                id: task.id,
+                                taskTitle: task.taskTitle,
+                                taskDescription: task.taskDescription,
+                                priority: task.priority as "low" | "normal" | "high" | "critical",
+                              }}
+                            />
+                          }
+                          onDoneClick={handleDoneClick}
+                          onSnapshotChange={handleSnapshotChange}
+                        />
+                        <div className="flex items-center gap-1.5">
+                          {task.assignedBy && task.userId === currentUserId ? (
+                            <AssignmentReviewControls
+                              latestReview={task.latestReview ?? null}
+                              mode="assignee"
+                              taskId={task.id}
+                              taskTitle={task.taskTitle}
+                            />
+                          ) : null}
+                        </div>
+                      </div>
                     </div>
 
                     {taskDescription ? (
-                      <p className="min-w-0 rounded-lg bg-white/60 px-2 py-1.5 text-xs leading-5 text-slate-600 transition-colors break-words">
-                        {taskDescription}
-                      </p>
-                    ) : null}
-
-                    <div className="flex flex-wrap items-center gap-1 xl:justify-center">
-                      <span
-                        className={`inline-flex min-w-[72px] items-center justify-center rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${getPriorityTone(task.priority)}`}
-                      >
-                        {formatPriority(task.priority)}
-                      </span>
-                      <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${statusMeta.chip}`}>
-                        {statusMeta.label}
-                      </span>
-                      <span className="text-xs font-medium text-slate-500">{formatPlannedTime(task)}</span>
-                    </div>
-
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-end sm:gap-1 xl:min-w-[280px]">
-                      <TaskTimerActionWrapper
-                        task={task}
-                        canEdit={canEdit}
-                        afterDoneSlot={
-                          <TaskManageControls
-                            compact
-                            hideDoneAction
-                            task={{
-                              id: task.id,
-                              taskTitle: task.taskTitle,
-                              taskDescription: task.taskDescription,
-                              priority: task.priority as "low" | "normal" | "high" | "critical",
-                            }}
-                          />
-                        }
-                        onDoneClick={handleDoneClick}
-                        onSnapshotChange={handleSnapshotChange}
-                      />
-                      <div className="flex items-center gap-1.5">
-                        {task.assignedBy && task.userId === currentUserId ? (
-                          <AssignmentReviewControls
-                            latestReview={task.latestReview ?? null}
-                            mode="assignee"
-                            taskId={task.id}
-                            taskTitle={task.taskTitle}
-                          />
-                        ) : null}
+                      <div className="rounded-xl bg-white/75 px-3 py-2">
+                        <p className="text-xs leading-6 text-slate-600 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                          {taskDescription}
+                        </p>
                       </div>
-                    </div>
+                    ) : null}
                   </div>
                 </article>
               );
