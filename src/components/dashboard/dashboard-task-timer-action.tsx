@@ -124,8 +124,7 @@ export function DashboardTaskTimerAction({
   const [actualEnd, setActualEnd] = useState(toInputDateTime(initialActualEnd));
   const [runningStartedAt, setRunningStartedAt] = useState("");
   const isCompleted = status === "done";
-  const hasSavedOpenSession = Boolean(actualStart) && !actualEnd;
-  const canStart = canEdit && !saving && !isCompleted && !runningStartedAt && !hasSavedOpenSession;
+  const canStart = canEdit && !saving && !runningStartedAt;
   const canDone = canEdit && !saving && !isCompleted && Boolean(onDoneClick);
 
   useEffect(() => {
@@ -481,7 +480,7 @@ export function DashboardTaskTimerAction({
             Done
           </Button>
         )}
-        {afterDoneSlot}
+        {afterDoneSlot ? afterDoneSlot : null}
         <span
           className={`inline-flex min-w-[110px] items-center justify-center gap-1 rounded-full border border-slate-200 bg-white/80 font-semibold tabular-nums text-slate-600 ${
             compact ? "px-2 py-1 text-[10px]" : "px-3 py-1.5 text-xs"

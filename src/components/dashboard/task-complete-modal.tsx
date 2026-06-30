@@ -33,7 +33,6 @@ export function TaskCompleteModal({
   saving = false,
   onSave,
 }: TaskCompleteModalProps) {
-  const [completionStatus, setCompletionStatus] = useState<"done" | "partial">("done");
   const [completionNote, setCompletionNote] = useState("");
   const [needFollowUp, setNeedFollowUp] = useState(false);
   const [followUpDate, setFollowUpDate] = useState("");
@@ -45,7 +44,6 @@ export function TaskCompleteModal({
       return;
     }
 
-    setCompletionStatus("done");
     setCompletionNote("");
     setNeedFollowUp(false);
     setFollowUpDate("");
@@ -53,7 +51,15 @@ export function TaskCompleteModal({
     setFollowUpNote("");
   }, [open, taskTitle]);
 
-  const showFollowUpFields = needFollowUp || completionStatus === "partial";
+  const showFollowUpFields = needFollowUp;
+
+  function handleNeedFollowUpChange(value: boolean) {
+    setNeedFollowUp(value);
+
+    if (value && !followUpDate) {
+      setFollowUpDate(toDateOnly());
+    }
+  }
 
   async function handleSave() {
     if (showFollowUpFields && (!followUpDate || !followUpTime)) {
@@ -61,7 +67,7 @@ export function TaskCompleteModal({
     }
 
     await onSave({
-      completionStatus,
+      completionStatus: "done",
       completionNote: completionNote.trim(),
       needFollowUp: showFollowUpFields,
       followUpDate,
@@ -90,35 +96,8 @@ export function TaskCompleteModal({
           <div className="space-y-5 px-6 py-6">
             <div>
               <Label className="mb-2 block">Task completion status</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button
-                  className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
-                    completionStatus === "done"
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                      : "border-[var(--panel-border)] bg-[var(--panel-muted)] text-[var(--foreground)] hover:border-emerald-200"
-                  }`}
-                  onClick={() => setCompletionStatus("done")}
-                  type="button"
-                >
-                  Done / Fully Completed
-                </button>
-                <button
-                  className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
-                    completionStatus === "partial"
-                      ? "border-amber-300 bg-amber-50 text-amber-800"
-                      : "border-[var(--panel-border)] bg-[var(--panel-muted)] text-[var(--foreground)] hover:border-amber-200"
-                  }`}
-                  onClick={() => {
-                    setCompletionStatus("partial");
-                    setNeedFollowUp(true);
-                    if (!followUpDate) {
-                      setFollowUpDate(toDateOnly());
-                    }
-                  }}
-                  type="button"
-                >
-                  Partially Done / Need Follow-up
-                </button>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+                Done / Fully Completed
               </div>
             </div>
 
@@ -133,35 +112,33 @@ export function TaskCompleteModal({
               />
             </div>
 
-            {completionStatus === "done" ? (
-              <div>
-                <Label className="mb-2 block">Need to work on this again?</Label>
-                <div className="flex gap-2">
-                  <button
-                    className={`flex-1 rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                      needFollowUp
-                        ? "border-[#4f5ef7] bg-[#eef2ff] text-[#3148d8]"
-                        : "border-[var(--panel-border)] bg-[var(--panel-muted)] text-[var(--foreground)]"
-                    }`}
-                    onClick={() => setNeedFollowUp(true)}
-                    type="button"
-                  >
-                    Yes
-                  </button>
-                  <button
-                    className={`flex-1 rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                      !needFollowUp
-                        ? "border-slate-300 bg-slate-100 text-slate-800"
-                        : "border-[var(--panel-border)] bg-[var(--panel-muted)] text-[var(--foreground)]"
-                    }`}
-                    onClick={() => setNeedFollowUp(false)}
-                    type="button"
-                  >
-                    No
-                  </button>
-                </div>
+            <div>
+              <Label className="mb-2 block">Need to work on this again?</Label>
+              <div className="flex gap-2">
+                <button
+                  className={`flex-1 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                    needFollowUp
+                      ? "border-violet-500 bg-violet-600 text-white shadow-[0_10px_24px_rgba(124,58,237,0.28)]"
+                      : "border-slate-300 bg-slate-100 text-slate-700 hover:border-violet-300 hover:bg-violet-50"
+                  }`}
+                  onClick={() => handleNeedFollowUpChange(true)}
+                  type="button"
+                >
+                  Yes
+                </button>
+                <button
+                  className={`flex-1 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                    !needFollowUp
+                      ? "border-emerald-500 bg-emerald-600 text-white shadow-[0_10px_24px_rgba(5,150,105,0.24)]"
+                      : "border-slate-300 bg-slate-100 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50"
+                  }`}
+                  onClick={() => handleNeedFollowUpChange(false)}
+                  type="button"
+                >
+                  No
+                </button>
               </div>
-            ) : null}
+            </div>
 
             {showFollowUpFields ? (
               <div className="space-y-4 rounded-2xl border border-[#dbe4ff] bg-[#f8faff] p-4">

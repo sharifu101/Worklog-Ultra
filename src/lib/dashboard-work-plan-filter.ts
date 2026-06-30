@@ -37,11 +37,6 @@ export function isVisibleInTodaysWorkPlan(task: WorkPlanTaskLike, date = toDateO
     return false;
   }
 
-  const status = getTaskStatusForDashboard(task, date);
-  if (status === "done") {
-    return false;
-  }
-
   const followUp = extractFollowUpMeta(task.taskDescription);
   if (followUp) {
     return followUp.scheduledDate === date;

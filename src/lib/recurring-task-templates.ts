@@ -33,6 +33,10 @@ export const RECURRING_TEMPLATES_STORAGE_KEY = "worklog-recurring-templates";
 export const OTHER_DEPARTMENT_ID = "__other__";
 export const RECURRING_TASK_MARKER = "[recurring-task]";
 
+function getRecurringTemplatesStorageKey(userId?: string) {
+  return userId ? `${RECURRING_TEMPLATES_STORAGE_KEY}:${userId}` : RECURRING_TEMPLATES_STORAGE_KEY;
+}
+
 export function isRecurringTaskDescription(description?: string | null) {
   return Boolean(description?.includes(RECURRING_TASK_MARKER));
 }
@@ -54,12 +58,12 @@ export function getTodayPlanDraftStorageKey(userId: string) {
   return `worklog-plan-draft:${userId}:${toDateOnly()}`;
 }
 
-export function readRecurringTemplates() {
+export function readRecurringTemplates(userId?: string) {
   if (typeof window === "undefined") {
     return [] as RecurringTemplate[];
   }
 
-  const raw = window.localStorage.getItem(RECURRING_TEMPLATES_STORAGE_KEY);
+  const raw = window.localStorage.getItem(getRecurringTemplatesStorageKey(userId));
   if (!raw) {
     return [] as RecurringTemplate[];
   }
@@ -84,30 +88,35 @@ export function readRecurringTemplates() {
   }
 }
 
-export function writeRecurringTemplates(templates: RecurringTemplate[]) {
+export function writeRecurringTemplates(templates: RecurringTemplate[], userId?: string) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.setItem(RECURRING_TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
+  window.localStorage.setItem(getRecurringTemplatesStorageKey(userId), JSON.stringify(templates));
   window.dispatchEvent(new CustomEvent("worklog-recurring-templates-updated"));
 }
 
-export function saveRecurringTemplate(template: RecurringTemplate) {
-  const current = readRecurringTemplates();
+export function saveRecurringTemplate(template: RecurringTemplate, userId?: string) {
+  const current = readRecurringTemplates(userId);
   const nextTemplate = {
     ...template,
     id: template.id || crypto.randomUUID(),
   };
   const next = [nextTemplate, ...current.filter((item) => item.id !== nextTemplate.id)].slice(0, 20);
-  writeRecurringTemplates(next);
+  writeRecurringTemplates(next, userId);
   return next;
 }
 
-export function deleteRecurringTemplate(templateId: string) {
-  const next = readRecurringTemplates().filter((item) => item.id !== templateId);
-  writeRecurringTemplates(next);
+export function deleteRecurringTemplate(templateId: string, userId?: string) {
+  const next = readRecurringTemplates(userId).filter((item) => item.id !== templateId);
+  writeRecurringTemplates(next, userId);
   return next;
+}
+
+export function clearRecurringTemplates(userId?: string) {
+  writeRecurringTemplates([], userId);
+  return [] as RecurringTemplate[];
 }
 
 export function isRecurringTemplateDueToday(template: RecurringTemplate, today = new Date()) {

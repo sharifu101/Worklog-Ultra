@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -13,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { TaskManageControls } from "@/components/dashboard/task-manage-controls";
+import { isMovedToHistory } from "@/lib/task-history-shared";
 import { getTaskTimerStorageKey } from "@/lib/task-timer-storage";
 import { getReadableTaskDescription } from "@/lib/report-summary";
 import { calculateTaskOvertimeMinutes, getTaskAutoStopLabel } from "@/lib/task-session-meta";
@@ -31,6 +33,7 @@ type HistoryItem = {
     trackedMinutes: number;
     actualStart: Date | null;
     actualEnd: Date | null;
+    updatedAt?: Date | null;
     note?: string | null;
     completionPercent?: number;
     difficultyLevel?: string | null;
@@ -125,6 +128,7 @@ function formatHistoryTimeParts(value?: Date | string | null) {
       meridiem: "",
       date: "Waiting for update",
       isSet: false,
+      isLive: false,
     };
   }
 
@@ -136,6 +140,7 @@ function formatHistoryTimeParts(value?: Date | string | null) {
       meridiem: "",
       date: "Waiting for update",
       isSet: false,
+      isLive: false,
     };
   }
 
@@ -160,7 +165,35 @@ function formatHistoryTimeParts(value?: Date | string | null) {
       day: "numeric",
     }).format(date),
     isSet: true,
+    isLive: false,
   };
+}
+
+function getResolvedEndTimeParts(task: HistoryItem, now: Date) {
+  const savedEnd = task.updates[0]?.actualEnd;
+
+  if (savedEnd) {
+    return formatHistoryTimeParts(savedEnd);
+  }
+
+  const completionFallback = task.updates[0]?.status === "done" ? task.updates[0]?.updatedAt : null;
+  if (completionFallback) {
+    return {
+      ...formatHistoryTimeParts(completionFallback),
+      date: "Completed today",
+      isLive: false,
+    };
+  }
+
+  if (task.isToday && task.updates[0]?.status === "in_progress") {
+    return {
+      ...formatHistoryTimeParts(now),
+      date: "Running now",
+      isLive: true,
+    };
+  }
+
+  return formatHistoryTimeParts(null);
 }
 
 function formatTrackedMinutes(totalMinutes: number) {
@@ -195,14 +228,30 @@ function getContinuationOverview(task: HistoryItem) {
     return null;
   }
 
+  const currentDayEntry = {
+    date: toDateOnly(task.planDate),
+    progress: task.updates[0]?.completionPercent ?? 0,
+    trackedMinutes: task.updates[0]?.trackedMinutes ?? 0,
+    note: task.updates[0]?.note?.trim() ?? "",
+  };
+  const mergedDailyLogs = [...(continuationMeta.dailyLogs ?? [])];
+  const existingCurrentDayIndex = mergedDailyLogs.findIndex((entry) => entry.date === currentDayEntry.date);
+
+  if (existingCurrentDayIndex >= 0) {
+    mergedDailyLogs[existingCurrentDayIndex] = currentDayEntry;
+  } else {
+    mergedDailyLogs.push(currentDayEntry);
+  }
+
+  mergedDailyLogs.sort((left, right) => left.date.localeCompare(right.date));
   const previousDayLog =
-    continuationMeta.dailyLogs.length > 0
-      ? continuationMeta.dailyLogs[continuationMeta.dailyLogs.length - 1]
+    mergedDailyLogs.length > 1
+      ? mergedDailyLogs[mergedDailyLogs.length - 2]
       : null;
   const currentTrackedMinutes = task.updates[0]?.trackedMinutes ?? 0;
   const currentProgress = task.updates[0]?.completionPercent ?? 0;
-  const previousTrackedMinutes = (continuationMeta.dailyLogs ?? []).reduce((sum, entry) => sum + entry.trackedMinutes, 0);
-  const totalDays = Math.max(continuationMeta.daysActive || 0, continuationMeta.dailyLogs.length, 1);
+  const overallTrackedMinutes = mergedDailyLogs.reduce((sum, entry) => sum + entry.trackedMinutes, 0);
+  const totalDays = Math.max(continuationMeta.daysActive || 0, mergedDailyLogs.length, 1);
 
   return {
     sourceDate: continuationMeta.sourceDate,
@@ -210,9 +259,9 @@ function getContinuationOverview(task: HistoryItem) {
     currentTrackedMinutes,
     currentProgress,
     totalDays,
-    overallTrackedMinutes: previousTrackedMinutes + currentTrackedMinutes,
+    overallTrackedMinutes,
     lastNote: continuationMeta.note,
-    dailyLogs: continuationMeta.dailyLogs,
+    dailyLogs: mergedDailyLogs,
   };
 }
 
@@ -222,6 +271,8 @@ function getTrackedTone(totalMinutes: number) {
   if (totalMinutes > 0) return "bg-amber-50 text-amber-700";
   return "bg-slate-100 text-slate-600";
 }
+
+const compactActionButtonClass = "h-8 rounded-full px-3 text-xs font-semibold";
 
 function getRecencyMeta(task: HistoryItem) {
   const referenceDate = task.updates[0]?.actualEnd ?? task.planDate;
@@ -373,10 +424,56 @@ export function HistoryTable({
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<HistoryItem | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<PendingRequest | null>(null);
+  const [liveNow, setLiveNow] = useState(() => new Date());
+  const [isClient, setIsClient] = useState(false);
 
   const visibleHistory = useMemo(() => {
-    return history;
+    if (mode !== "history") {
+      return history;
+    }
+
+    return history.filter((task) => {
+      if (!task.isToday) {
+        return true;
+      }
+
+      const latestUpdate = task.updates[0];
+      const isArchived = isMovedToHistory(task.taskDescription);
+      const isCompleted =
+        latestUpdate?.status === "done" ||
+        (latestUpdate?.completionPercent ?? 0) >= 100 ||
+        Boolean(latestUpdate?.actualEnd) ||
+        isArchived;
+
+      return isCompleted;
+    });
   }, [history, mode, role]);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTask && !selectedRequest) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedTask(null);
+        setSelectedRequest(null);
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedRequest, selectedTask]);
 
   useEffect(() => {
     const syncTheme = () => {
@@ -389,6 +486,11 @@ export function HistoryTable({
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setLiveNow(new Date()), 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -542,16 +644,22 @@ export function HistoryTable({
     const reportDate = toDateOnly(task.planDate);
 
     return (
-      <div className="flex max-w-[260px] flex-wrap gap-2">
-        <Button onClick={() => setSelectedTask(task)} size="sm" variant="secondary">
-          View Details
+      <div className="flex max-w-[240px] flex-wrap gap-1.5">
+        <Button className={compactActionButtonClass} onClick={() => setSelectedTask(task)} size="sm" variant="secondary">
+          Details
         </Button>
         <Link href={`/dashboard/report?date=${reportDate}&taskId=${task.id}`}>
-          <Button size="sm" variant="outline">
+          <Button className={compactActionButtonClass} size="sm" variant="outline">
             Open Editor
           </Button>
         </Link>
-        <Button disabled={loadingId === task.id} onClick={() => restoreTaskToDashboard(task, { autoStart: true })} size="sm" variant="outline">
+        <Button
+          className={compactActionButtonClass}
+          disabled={loadingId === task.id}
+          onClick={() => restoreTaskToDashboard(task, { autoStart: true })}
+          size="sm"
+          variant="outline"
+        >
           Return To Dashboard
         </Button>
         <TaskManageControls
@@ -606,7 +714,7 @@ export function HistoryTable({
                 const rowStyle = getRowStyle(theme, recency.tone ?? "default");
                 const dateParts = formatHistoryDateParts(task.planDate);
                 const startedParts = formatHistoryTimeParts(task.updates[0]?.actualStart);
-                const endedParts = formatHistoryTimeParts(task.updates[0]?.actualEnd);
+                const endedParts = getResolvedEndTimeParts(task, liveNow);
                 const continuationOverview = getContinuationOverview(task);
                 const visibleNote = getHistoryNote(task);
                 const overtimeMinutes = calculateTaskOvertimeMinutes({
@@ -625,7 +733,11 @@ export function HistoryTable({
                     key={task.id}
                     className="align-top border-0"
                   >
-                    <TD className={`${recency.row} rounded-l-[22px] border border-r-0 px-4 py-4 text-[var(--foreground)]`} style={rowStyle}>
+                    <TD
+                      className={`${recency.row} cursor-pointer rounded-l-[22px] border border-r-0 px-4 py-3 text-[var(--foreground)]`}
+                      onClick={() => setSelectedTask(task)}
+                      style={rowStyle}
+                    >
                       <div className="space-y-2">
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
@@ -639,21 +751,25 @@ export function HistoryTable({
                         {recency.label ? <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] ${recency.chip}`}>{recency.label}</span> : null}
                       </div>
                     </TD>
-                    <TD className={`${recency.row} border-y px-4 py-4 text-[var(--foreground)]`} style={rowStyle}>
-                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                    <TD
+                      className={`${recency.row} cursor-pointer border-y px-4 py-3 text-[var(--foreground)]`}
+                      onClick={() => setSelectedTask(task)}
+                      style={rowStyle}
+                    >
+                      <div className="flex flex-col gap-2.5 xl:flex-row xl:items-start xl:justify-between">
                         <div className="min-w-0 flex-1 space-y-2">
                           <div className="text-lg font-bold leading-snug text-[var(--foreground)]">{task.taskTitle}</div>
                           <p className="text-sm font-medium text-[var(--muted-foreground)]">
                             Created for {dateParts.compact}
                           </p>
                           {visibleNote ? (
-                            <p className="line-clamp-2 text-sm leading-6 text-[var(--muted-foreground)]">
+                            <p className="line-clamp-1 text-sm leading-6 text-[var(--muted-foreground)]">
                               {visibleNote}
                             </p>
                           ) : null}
                         </div>
-                        <div className="grid gap-2 xl:min-w-[210px]">
-                          <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/35 px-3 py-2.5 dark:bg-white/5">
+                        <div className="grid gap-1.5 xl:min-w-[210px]">
+                          <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/35 px-3 py-2 dark:bg-white/5">
                             <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Start</span>
                             <div className="text-right">
                               <p className={`text-sm font-bold ${startedParts.isSet ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}>
@@ -662,18 +778,18 @@ export function HistoryTable({
                               <p className="text-xs text-[var(--muted-foreground)]">{startedParts.date}</p>
                             </div>
                           </div>
-                          <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/35 px-3 py-2.5 dark:bg-white/5">
+                          <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/35 px-3 py-2 dark:bg-white/5">
                             <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">End</span>
                             <div className="text-right">
-                              <p className={`text-sm font-bold ${endedParts.isSet ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}>
+                              <p className={`text-sm font-bold ${endedParts.isLive ? "text-emerald-600" : endedParts.isSet ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}>
                                 {formatTimeLabel(endedParts)}
                               </p>
-                              <p className="text-xs text-[var(--muted-foreground)]">{endedParts.date}</p>
+                              <p className={`text-xs ${endedParts.isLive ? "text-emerald-600" : "text-[var(--muted-foreground)]"}`}>{endedParts.date}</p>
                             </div>
                           </div>
                         </div>
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className="rounded-full border px-2.5 py-1 text-xs font-semibold text-[var(--foreground)]" style={themeStyles.departmentChip}>
                           {task.department.name}
                         </span>
@@ -686,6 +802,11 @@ export function HistoryTable({
                             {continuationOverview.totalDays} work day{continuationOverview.totalDays > 1 ? "s" : ""}
                           </span>
                         ) : null}
+                        {continuationOverview ? (
+                          <span className="inline-flex rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                            Total {formatMinutesAsHours(continuationOverview.overallTrackedMinutes)}
+                          </span>
+                        ) : null}
                         {overtimeMinutes > 0 ? (
                           <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                             Overtime {formatMinutes(overtimeMinutes)}
@@ -696,9 +817,12 @@ export function HistoryTable({
                             {autoStopLabel}
                           </span>
                         ) : null}
+                        <span className="inline-flex rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-[var(--muted-foreground)]">
+                          Click row for full details
+                        </span>
                       </div>
                     </TD>
-                    <TD className={`${recency.row} min-w-[180px] rounded-r-[22px] border border-l-0 px-4 py-4 text-[var(--foreground)] align-top`} style={rowStyle}>
+                    <TD className={`${recency.row} min-w-[180px] rounded-r-[22px] border border-l-0 px-4 py-3 text-[var(--foreground)] align-top`} style={rowStyle}>
                       {renderAction(task)}
                     </TD>
                   </TR>
@@ -709,9 +833,13 @@ export function HistoryTable({
         </div>
       ) : null}
 
-      {selectedTask ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-3xl border border-[var(--panel-border)] bg-[var(--panel)] shadow-2xl">
+      {selectedTask && isClient
+        ? createPortal(
+        <div className="fixed inset-0 z-[80] bg-slate-950/75 backdrop-blur-sm" onClick={() => setSelectedTask(null)}>
+          <div
+            className="fixed left-1/2 top-1/2 z-[90] max-h-[90vh] w-[min(960px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-3xl border border-[var(--panel-border)] bg-[var(--panel)] shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-4 border-b border-[var(--panel-border)] px-6 py-5">
               <div>
                 <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">
@@ -733,6 +861,7 @@ export function HistoryTable({
                   actualStart: selectedTask.updates[0]?.actualStart,
                   actualEnd: selectedTask.updates[0]?.actualEnd,
                 });
+                const selectedEndedParts = getResolvedEndTimeParts(selectedTask, liveNow);
                 const selectedAutoStopLabel = getTaskAutoStopLabel({
                   planDate: selectedTask.planDate,
                   status: selectedTask.updates[0]?.status,
@@ -768,8 +897,12 @@ export function HistoryTable({
                         </div>
                         <div>
                           <dt className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Ended</dt>
-                          <dd className="mt-1 text-base font-semibold text-[var(--foreground)]">{formatTimeLabel(formatHistoryTimeParts(selectedTask.updates[0]?.actualEnd))}</dd>
-                          <dd className="text-sm text-[var(--muted-foreground)]">{formatHistoryTimeParts(selectedTask.updates[0]?.actualEnd).date}</dd>
+                          <dd className={`mt-1 text-base font-semibold ${selectedEndedParts.isLive ? "text-emerald-600" : "text-[var(--foreground)]"}`}>
+                            {formatTimeLabel(selectedEndedParts)}
+                          </dd>
+                          <dd className={`text-sm ${selectedEndedParts.isLive ? "text-emerald-600" : "text-[var(--muted-foreground)]"}`}>
+                            {selectedEndedParts.date}
+                          </dd>
                         </div>
                         <div>
                           <dt className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Completion</dt>
@@ -792,9 +925,43 @@ export function HistoryTable({
                 );
               })()}
 
+              {!extractContinuationMeta(selectedTask.taskDescription) ? (
+                <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Work Activity</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--foreground)]">Single-day work summary</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                      <span className="rounded-full bg-white/75 px-3 py-1 text-slate-700">1 day</span>
+                      <span className="rounded-full bg-white/75 px-3 py-1 text-slate-700">
+                        Total {formatMinutes(selectedTask.updates[0]?.trackedMinutes ?? 0)}
+                      </span>
+                      <span className="rounded-full bg-white/75 px-3 py-1 text-slate-700">
+                        {toDateOnly(selectedTask.planDate)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-white/60 bg-white/75 p-3 text-sm text-slate-700 dark:border-white/10 dark:bg-slate-950/20 dark:text-white/85">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-800 dark:bg-white/10 dark:text-white/85">
+                        {toDateOnly(selectedTask.planDate)}
+                      </span>
+                      <span className="text-xs font-semibold">{selectedTask.updates[0]?.completionPercent ?? 0}% complete</span>
+                    </div>
+                    <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-white/65">
+                      Worked {formatMinutes(selectedTask.updates[0]?.trackedMinutes ?? 0)}
+                    </p>
+                    <p className="mt-2 whitespace-pre-line text-sm">
+                      {selectedTask.updates[0]?.note?.trim() || "No note added for this work day."}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
               {extractContinuationMeta(selectedTask.taskDescription) ? (
                 <div className="rounded-2xl border border-violet-300/40 bg-violet-50 p-4 dark:border-violet-400/30 dark:bg-violet-500/10">
-                  <p className="text-xs uppercase tracking-[0.18em] text-violet-700 dark:text-violet-200">Continuation</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-violet-700 dark:text-violet-200">Work Activity</p>
                   {(() => {
                     const continuationOverview = getContinuationOverview(selectedTask);
 
@@ -859,32 +1026,26 @@ export function HistoryTable({
                 <Button disabled={loadingId === selectedTask.id} onClick={() => restoreTaskToDashboard(selectedTask, { autoStart: true })} size="sm" variant="outline">
                   Resume On Dashboard
                 </Button>
-                <TaskManageControls
-                  hideDoneAction
-                  task={{
-                    id: selectedTask.id,
-                    taskTitle: selectedTask.taskTitle,
-                    taskDescription: selectedTask.taskDescription,
-                    priority: (selectedTask as { priority?: "low" | "normal" | "high" | "critical" }).priority ?? "normal",
-                  }}
-                />
                 <Link href={`/dashboard/report?date=${toDateOnly(selectedTask.planDate)}&taskId=${selectedTask.id}`}>
                   <Button size="sm" variant="secondary">
-                    Open Full Editor
+                    Open Editor
                   </Button>
                 </Link>
-                <Button onClick={() => setSelectedTask(null)} size="sm" type="button">
-                  Close
-                </Button>
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
 
-      {selectedRequest ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-3xl rounded-3xl border border-[var(--panel-border)] bg-[var(--panel)] shadow-2xl">
+      {selectedRequest && isClient
+        ? createPortal(
+        <div className="fixed inset-0 z-[80] bg-slate-950/75 backdrop-blur-sm" onClick={() => setSelectedRequest(null)}>
+          <div
+            className="fixed left-1/2 top-1/2 z-[90] max-h-[90vh] w-[min(960px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-3xl border border-[var(--panel-border)] bg-[var(--panel)] shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-4 border-b border-[var(--panel-border)] px-6 py-5">
               <div>
                 <p className="text-xs uppercase tracking-[0.24em] text-cyan-300">Pending Approval</p>
@@ -935,8 +1096,10 @@ export function HistoryTable({
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
     </div>
   );
 }

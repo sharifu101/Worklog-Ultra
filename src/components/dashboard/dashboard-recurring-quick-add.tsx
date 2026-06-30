@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  clearRecurringTemplates,
   OTHER_DEPARTMENT_ID,
   describeRecurringTemplate,
   embedRecurringTaskDescription,
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { RecurringTasksCenter } from "@/components/dashboard/recurring-tasks-center";
 import {
   DASHBOARD_TASKS_CREATED_EVENT,
+  DASHBOARD_TASKS_REMOVED_EVENT,
   dispatchDashboardTasksCreated,
   scheduleDashboardTaskAutostart,
 } from "@/lib/dashboard-live-events";
@@ -44,11 +46,12 @@ export function DashboardRecurringQuickAdd({
   const [page, setPage] = useState(0);
   const [addingTemplateId, setAddingTemplateId] = useState<string | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [addedTaskTitles, setAddedTaskTitles] = useState<string[]>(existingTaskTitles);
   const pageSize = 4;
   const loadTemplates = useMemo(
     () => () => {
-      const allTemplates = readRecurringTemplates().filter((template) => isRecurringTemplateActiveNow(template));
+      const allTemplates = readRecurringTemplates(currentUserId).filter((template) => isRecurringTemplateActiveNow(template));
       const sorted = [...allTemplates].sort((left, right) => {
         const leftDue = isRecurringTemplateDueToday(left) ? 1 : 0;
         const rightDue = isRecurringTemplateDueToday(right) ? 1 : 0;
@@ -62,7 +65,7 @@ export function DashboardRecurringQuickAdd({
 
       setTemplates(sorted);
     },
-    [],
+    [currentUserId],
   );
 
   useEffect(() => {
@@ -98,8 +101,28 @@ export function DashboardRecurringQuickAdd({
       ]);
     }
 
+    function handleTasksRemoved(event: Event) {
+      const detail = (event as CustomEvent<{ tasks?: Array<{ taskTitle: string }> }>).detail;
+      const removedTitles = new Set(
+        (detail?.tasks ?? []).map((task) => task.taskTitle.trim().toLowerCase()).filter(Boolean),
+      );
+
+      if (!removedTitles.size) {
+        return;
+      }
+
+      setAddedTaskTitles((current) =>
+        current.filter((title) => !removedTitles.has(title.trim().toLowerCase())),
+      );
+    }
+
     window.addEventListener(DASHBOARD_TASKS_CREATED_EVENT, handleTasksCreated);
-    return () => window.removeEventListener(DASHBOARD_TASKS_CREATED_EVENT, handleTasksCreated);
+    window.addEventListener(DASHBOARD_TASKS_REMOVED_EVENT, handleTasksRemoved);
+
+    return () => {
+      window.removeEventListener(DASHBOARD_TASKS_CREATED_EVENT, handleTasksCreated);
+      window.removeEventListener(DASHBOARD_TASKS_REMOVED_EVENT, handleTasksRemoved);
+    };
   }, []);
 
   const totalPages = Math.max(1, Math.ceil(templates.length / pageSize));
@@ -181,48 +204,75 @@ export function DashboardRecurringQuickAdd({
     router.refresh();
   }
 
+  function handleClearTemplates() {
+    if (!templates.length || clearing) {
+      return;
+    }
+
+    const confirmed = window.confirm("Clear all saved recurring jobs? This will remove every recurring setup you saved.");
+    if (!confirmed) {
+      return;
+    }
+
+    setClearing(true);
+    clearRecurringTemplates(currentUserId);
+    setPage(0);
+    setClearing(false);
+    toast.success("All recurring jobs cleared.");
+  }
+
   return (
     <div className="rounded-[24px] bg-[var(--panel)] p-4 shadow-[var(--shadow)]">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-[1.05rem] font-bold leading-tight text-[var(--foreground)]">Today&apos;s Recurring Suggestions</h3>
-        <Dialog.Root onOpenChange={setManageOpen} open={manageOpen}>
-          <Dialog.Trigger asChild>
-            <button className="shrink-0 text-sm font-semibold text-[#4f5ef7] hover:text-[#3f4ede]" type="button">
-              Manage
-            </button>
-          </Dialog.Trigger>
-          <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 z-40 bg-[rgba(3,8,18,0.62)] backdrop-blur-sm" />
-            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[min(1080px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[30px] border border-[var(--panel-border)] bg-[var(--panel)] shadow-[0_36px_90px_rgba(15,23,42,0.28)] outline-none">
-              <div className="flex items-center justify-between gap-3 border-b border-[var(--panel-border)] px-5 py-4">
-                <div>
-                  <Dialog.Title className="text-lg font-bold text-[var(--foreground)]">Recurring Work Setup</Dialog.Title>
-                  <Dialog.Description className="mt-1 text-sm text-[var(--muted-foreground)]">
-                    Save repeat work here and add it to today&apos;s plan without leaving the dashboard.
-                  </Dialog.Description>
+        <div className="flex items-center gap-3">
+          <button
+            className="shrink-0 text-sm font-semibold text-rose-500 transition hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!templates.length || clearing}
+            onClick={handleClearTemplates}
+            type="button"
+          >
+            {clearing ? "Clearing..." : "Clear"}
+          </button>
+          <Dialog.Root onOpenChange={setManageOpen} open={manageOpen}>
+            <Dialog.Trigger asChild>
+              <button className="shrink-0 text-sm font-semibold text-[#4f5ef7] hover:text-[#3f4ede]" type="button">
+                Manage
+              </button>
+            </Dialog.Trigger>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 z-40 bg-[rgba(3,8,18,0.62)] backdrop-blur-sm" />
+              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[min(1080px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[30px] border border-[var(--panel-border)] bg-[var(--panel)] shadow-[0_36px_90px_rgba(15,23,42,0.28)] outline-none">
+                <div className="flex items-center justify-between gap-3 border-b border-[var(--panel-border)] px-5 py-4">
+                  <div>
+                    <Dialog.Title className="text-lg font-bold text-[var(--foreground)]">Recurring Work Setup</Dialog.Title>
+                    <Dialog.Description className="mt-1 text-sm text-[var(--muted-foreground)]">
+                      Save repeat work here and add it to today&apos;s plan without leaving the dashboard.
+                    </Dialog.Description>
+                  </div>
+                  <Dialog.Close asChild>
+                    <button
+                      aria-label="Close recurring work popup"
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-alt)] text-[var(--foreground)] transition hover:bg-[var(--panel-muted)]"
+                      type="button"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </Dialog.Close>
                 </div>
-                <Dialog.Close asChild>
-                  <button
-                    aria-label="Close recurring work popup"
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-alt)] text-[var(--foreground)] transition hover:bg-[var(--panel-muted)]"
-                    type="button"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </Dialog.Close>
-              </div>
-              <div className="overflow-y-auto px-5 py-5">
-                <RecurringTasksCenter
-                  allowOtherDepartment={allowOtherDepartment}
-                  currentUserId={currentUserId}
-                  departments={departments}
-                  onSaved={() => setManageOpen(false)}
-                  userDepartmentId={currentUserDepartmentId}
-                />
-              </div>
-            </Dialog.Content>
-          </Dialog.Portal>
-        </Dialog.Root>
+                <div className="overflow-y-auto px-5 py-5">
+                  <RecurringTasksCenter
+                    allowOtherDepartment={allowOtherDepartment}
+                    currentUserId={currentUserId}
+                    departments={departments}
+                    onSaved={() => setManageOpen(false)}
+                    userDepartmentId={currentUserDepartmentId}
+                  />
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
+        </div>
       </div>
       <div className="mt-3 space-y-2">
         {templates.length ? (

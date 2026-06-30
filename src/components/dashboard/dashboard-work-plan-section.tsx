@@ -8,7 +8,10 @@ import { DashboardTaskTimerAction, type TaskTimerSnapshot } from "@/components/d
 import { TaskAutoStopNoteModal } from "@/components/dashboard/task-auto-stop-note-modal";
 import { TaskCompleteModal, type TaskCompletionPayload } from "@/components/dashboard/task-complete-modal";
 import { TaskManageControls } from "@/components/dashboard/task-manage-controls";
-import { DASHBOARD_TASKS_CREATED_EVENT, type DashboardLiveTask } from "@/lib/dashboard-live-events";
+import {
+  DASHBOARD_TASKS_CREATED_EVENT,
+  type DashboardLiveTask,
+} from "@/lib/dashboard-live-events";
 import {
   readPendingTaskAutoStopNotes,
   removePendingTaskAutoStopNote,
@@ -99,6 +102,70 @@ function getStatusMeta(status: "done" | "in_progress" | "pending") {
   }
 
   return { label: "Pending", chip: "border border-amber-200 bg-amber-50 text-amber-700" };
+}
+
+function getTaskSurfaceTone({
+  priority,
+  status,
+  hasFollowUp,
+  hasContinuation,
+}: {
+  priority: string;
+  status: "done" | "in_progress" | "pending";
+  hasFollowUp: boolean;
+  hasContinuation: boolean;
+}) {
+  if (hasFollowUp) {
+    return {
+      article:
+        "border-violet-300 bg-[linear-gradient(135deg,#f5eefe_0%,#ecdfff_52%,#f8f2ff_100%)] hover:border-violet-400 hover:bg-[linear-gradient(135deg,#f1e7ff_0%,#e7d7ff_52%,#f5edff_100%)] hover:shadow-[0_14px_30px_rgba(139,92,246,0.18)]",
+      note: "border border-violet-200/90 bg-[linear-gradient(135deg,#efe3ff_0%,#e6d7ff_100%)]",
+      time: "text-violet-700",
+    };
+  }
+
+  if (hasContinuation) {
+    return {
+      article:
+        "border-sky-300 bg-[linear-gradient(135deg,#eaf7ff_0%,#dff1ff_52%,#f1f9ff_100%)] hover:border-sky-400 hover:bg-[linear-gradient(135deg,#e2f3ff_0%,#d6edff_52%,#ebf7ff_100%)] hover:shadow-[0_14px_30px_rgba(56,189,248,0.18)]",
+      note: "border border-sky-200/90 bg-[linear-gradient(135deg,#dff1ff_0%,#d3ebff_100%)]",
+      time: "text-sky-700",
+    };
+  }
+
+  if (priority === "critical" || priority === "high") {
+    return {
+      article:
+        "border-rose-300 bg-[linear-gradient(135deg,#fff0f1_0%,#ffe3e8_48%,#fff2e8_100%)] hover:border-rose-400 hover:bg-[linear-gradient(135deg,#ffe9ec_0%,#ffd8e1_48%,#ffecdf_100%)] hover:shadow-[0_14px_30px_rgba(244,114,182,0.18)]",
+      note: "border border-rose-200/90 bg-[linear-gradient(135deg,#ffe3e7_0%,#ffd7df_100%)]",
+      time: "text-rose-600",
+    };
+  }
+
+  if (status === "in_progress") {
+    return {
+      article:
+        "border-blue-300 bg-[linear-gradient(135deg,#edf4ff_0%,#e1ebff_54%,#f3f7ff_100%)] hover:border-blue-400 hover:bg-[linear-gradient(135deg,#e5efff_0%,#d8e5ff_54%,#edf4ff_100%)] hover:shadow-[0_14px_30px_rgba(96,165,250,0.18)]",
+      note: "border border-blue-200/90 bg-[linear-gradient(135deg,#dfebff_0%,#d3e2ff_100%)]",
+      time: "text-blue-700",
+    };
+  }
+
+  if (priority === "normal" || status === "pending") {
+    return {
+      article:
+        "border-amber-300 bg-[linear-gradient(135deg,#fff6e6_0%,#ffefcf_52%,#fff7ea_100%)] hover:border-amber-400 hover:bg-[linear-gradient(135deg,#fff1da_0%,#ffe8bf_52%,#fff2df_100%)] hover:shadow-[0_14px_30px_rgba(245,158,11,0.18)]",
+      note: "border border-amber-200/90 bg-[linear-gradient(135deg,#ffeecf_0%,#ffe5bc_100%)]",
+      time: "text-amber-700",
+    };
+  }
+
+  return {
+    article:
+      "border-emerald-300 bg-[linear-gradient(135deg,#ebfff4_0%,#dcf9e9_52%,#f2fff8_100%)] hover:border-emerald-400 hover:bg-[linear-gradient(135deg,#e3fcea_0%,#d2f4e0_52%,#ebfdf3_100%)] hover:shadow-[0_14px_30px_rgba(52,211,153,0.17)]",
+    note: "border border-emerald-200/90 bg-[linear-gradient(135deg,#daf8e6_0%,#cef1dc_100%)]",
+    time: "text-emerald-700",
+  };
 }
 
 function formatTimeOnly(value?: string | null) {
@@ -216,12 +283,18 @@ export function DashboardWorkPlanSection({
   const [tasks, setTasks] = useState(initialTasks);
   const [completeTaskId, setCompleteTaskId] = useState<string | null>(null);
   const [savingCompletion, setSavingCompletion] = useState(false);
-  const [autoStopQueue, setAutoStopQueue] = useState<TaskAutoStopNotePayload[]>([]);
+  const [autoStopQueue, setAutoStopQueue] = useState<TaskAutoStopNotePayload[]>(() =>
+    typeof window === "undefined" ? [] : readPendingTaskAutoStopNotes(),
+  );
   const [savingAutoStopNote, setSavingAutoStopNote] = useState(false);
   const timerSnapshotsRef = useRef<Record<string, TaskTimerSnapshot>>({});
 
   useEffect(() => {
-    setTasks(initialTasks);
+    const syncHandle = window.setTimeout(() => {
+      setTasks(initialTasks);
+    }, 0);
+
+    return () => window.clearTimeout(syncHandle);
   }, [initialTasks]);
 
   useEffect(() => {
@@ -259,8 +332,6 @@ export function DashboardWorkPlanSection({
   }, []);
 
   useEffect(() => {
-    setAutoStopQueue(readPendingTaskAutoStopNotes());
-
     function handleAutoStopNoteNeeded(event: Event) {
       const detail = (event as CustomEvent<TaskAutoStopNotePayload>).detail;
       if (!detail?.taskId || !detail?.reportDate) {
@@ -315,9 +386,38 @@ export function DashboardWorkPlanSection({
     ? tasks.find((task) => task.id === activeAutoStopPrompt.taskId) ?? null
     : null;
 
-  function removeTaskFromToday(taskId: string) {
+  function markTaskCompleted(taskId: string, snapshot?: TaskTimerSnapshot) {
     setTasks((current) => {
       return current.map((task) => {
+        if (task.id !== taskId) {
+          return task;
+        }
+
+        return {
+          ...task,
+          updates: [
+            {
+              ...(task.updates[0] ?? {
+                trackedMinutes: Number(snapshot?.trackedMinutes ?? 0),
+                actualStart: null,
+                actualEnd: null,
+                note: null,
+                reportDate: toDateOnly(),
+              }),
+              status: "done" as const,
+              trackedMinutes: Number(snapshot?.trackedMinutes ?? task.updates[0]?.trackedMinutes ?? 0),
+              actualStart: snapshot?.actualStart ?? task.updates[0]?.actualStart ?? null,
+              actualEnd: snapshot?.actualEnd ?? task.updates[0]?.actualEnd ?? null,
+            },
+          ],
+        };
+      });
+    });
+  }
+
+  const handleMovedToHistory = useCallback((taskId: string) => {
+    setTasks((current) =>
+      current.map((task) => {
         if (task.id !== taskId) {
           return task;
         }
@@ -337,9 +437,9 @@ export function DashboardWorkPlanSection({
             },
           ],
         };
-      });
-    });
-  }
+      }),
+    );
+  }, []);
 
   function dismissAutoStopPrompt(taskId: string, reportDate: string) {
     removePendingTaskAutoStopNote(reportDate, taskId);
@@ -383,7 +483,7 @@ export function DashboardWorkPlanSection({
 
     toast.success(result.message ?? "Task completed.");
     setCompleteTaskId(null);
-    removeTaskFromToday(completingTask.id);
+    markTaskCompleted(completingTask.id, snapshot);
 
     if (typeof window !== "undefined") {
       const todayKey = toDateOnly();
@@ -498,10 +598,16 @@ export function DashboardWorkPlanSection({
               const continuationMeta = extractContinuationMeta(task.taskDescription);
               const followUpMeta = extractFollowUpMeta(task.taskDescription);
               const taskDescription = getReadableTaskDescription(task.taskDescription);
+              const surfaceTone = getTaskSurfaceTone({
+                priority: task.priority,
+                status,
+                hasFollowUp: Boolean(followUpMeta),
+                hasContinuation: Boolean(continuationMeta),
+              });
 
               return (
                 <article
-                  className="group rounded-[22px] border border-[#E4EAF5] bg-[#F8FAFF] p-3 transition hover:border-[#d5dff3] hover:bg-white hover:shadow-[0_10px_26px_rgba(79,94,247,0.12)]"
+                  className={`group rounded-[22px] border p-3 transition ${surfaceTone.article}`}
                   data-dashboard-row
                   key={task.id}
                 >
@@ -532,7 +638,7 @@ export function DashboardWorkPlanSection({
                           <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${statusMeta.chip}`}>
                             {statusMeta.label}
                           </span>
-                          <span className="text-xs font-medium text-slate-500">{formatPlannedTime(task)}</span>
+                          <span className={`text-xs font-semibold ${surfaceTone.time}`}>{formatPlannedTime(task)}</span>
                         </div>
                       </div>
 
@@ -544,6 +650,9 @@ export function DashboardWorkPlanSection({
                             <TaskManageControls
                               compact
                               hideDoneAction
+                              showArchiveAction
+                              showInlineDelete
+                              onMovedToHistory={handleMovedToHistory}
                               task={{
                                 id: task.id,
                                 taskTitle: task.taskTitle,
@@ -569,7 +678,7 @@ export function DashboardWorkPlanSection({
                     </div>
 
                     {taskDescription ? (
-                      <div className="rounded-xl bg-white/75 px-3 py-2">
+                      <div className={`rounded-xl px-3 py-2 ${surfaceTone.note}`}>
                         <p className="text-xs leading-6 text-slate-600 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                           {taskDescription}
                         </p>

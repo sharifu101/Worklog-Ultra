@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Building2, CircleDollarSign, Code2, Landmark, Megaphone, PackageCheck, Settings2, ShoppingBag, Users2 } from "lucide-react";
+import { BriefcaseBusiness, Building2, Code2, Landmark, Megaphone, PackageCheck, Settings2, ShoppingBag, Users2 } from "lucide-react";
 import { UserStatusToggle } from "@/components/admin/user-status-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +27,10 @@ function getDepartmentIcon(name: string) {
 
 export default async function AdminPage() {
   const actor = await requireAdminOrManager();
-  const { users, departments, latestReportSummaries, metrics } = await getAdminOverview();
+  const { users, departments, latestReportSummaries, metrics } = await getAdminOverview({
+    role: actor.role,
+    departmentId: actor.departmentId,
+  });
   const reportSummaryByUserId = new Map((latestReportSummaries ?? []).map((report) => [report.userId, report]));
   const departmentInsights = (departments ?? []).map((department) => {
     const members = (users ?? []).filter((user) => user.departmentId === department.id);

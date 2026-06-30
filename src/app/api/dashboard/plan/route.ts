@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { apiError, apiSuccess } from "@/lib/api";
 import { requireEmployee } from "@/lib/auth/server";
 import { db } from "@/lib/db";
+import { isMovedToHistory } from "@/lib/task-history-shared";
 import { toDateOnly } from "@/lib/utils";
 import { planSubmissionSchema } from "@/lib/validators/worklog";
 
@@ -52,11 +53,14 @@ export async function POST(request: NextRequest) {
     select: {
       userId: true,
       taskTitle: true,
+      taskDescription: true,
     },
   });
 
   const existingTaskKeySet = new Set(
-    existingTasks.map((task) => `${task.userId}:${task.taskTitle.trim().toLowerCase()}`),
+    existingTasks
+      .filter((task) => !isMovedToHistory(task.taskDescription))
+      .map((task) => `${task.userId}:${task.taskTitle.trim().toLowerCase()}`),
   );
 
   const duplicateExistingTask = normalizedTasks.find((task) =>

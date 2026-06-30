@@ -1,7 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { CheckSquare, Pencil, Trash2, X } from "lucide-react";
+import { Archive, CheckSquare, Pencil, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { dispatchDashboardTasksRemoved } from "@/lib/dashboard-live-events";
 import { embedHistoryMeta, isMovedToHistory, stripHistoryMeta } from "@/lib/task-history-shared";
 import { embedRecurringTaskDescription, isRecurringTaskDescription, stripRecurringTaskMeta } from "@/lib/recurring-task-templates";
 
@@ -28,7 +29,9 @@ export function TaskManageControls({
   compact = false,
   hideDoneAction = false,
   showInlineDelete = false,
+  showArchiveAction = false,
   timerPanel,
+  onMovedToHistory,
 }: {
   task: {
     id: string;
@@ -39,7 +42,9 @@ export function TaskManageControls({
   compact?: boolean;
   hideDoneAction?: boolean;
   showInlineDelete?: boolean;
+  showArchiveAction?: boolean;
   timerPanel?: ReactNode;
+  onMovedToHistory?: (taskId: string) => void;
 }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
@@ -51,12 +56,15 @@ export function TaskManageControls({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [markingDone, setMarkingDone] = useState(false);
+  const [movingToHistory, setMovingToHistory] = useState(false);
   const isRecurringTask = isRecurringTaskDescription(task.taskDescription);
   const isAlreadyMovedToHistory = isMovedToHistory(task.taskDescription);
   const editButtonClass =
     "button-force-white h-8 rounded-full border border-white/20 px-3 text-xs font-semibold tracking-[0.01em] bg-gradient-to-r from-[#4f46e5] via-[#8b5cf6] to-[#ec4899] shadow-[0_10px_24px_rgba(99,102,241,0.32)] transition-all duration-200 hover:scale-[1.02] hover:from-[#4338ca] hover:via-[#7c3aed] hover:to-[#db2777] active:scale-95";
   const markDoneButtonClass =
     "button-force-white h-8 rounded-full border border-white/20 px-3 text-xs font-semibold tracking-[0.01em] bg-gradient-to-r from-[#06b6d4] via-[#3b82f6] to-[#8b5cf6] shadow-[0_10px_24px_rgba(59,130,246,0.3)] hover:scale-[1.02] hover:from-[#0891b2] hover:via-[#2563eb] hover:to-[#7c3aed] transition-all duration-200 disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:hover:scale-100";
+  const quickMoveButtonClass =
+    "button-force-white h-8 w-8 rounded-full border border-white/20 bg-gradient-to-r from-[#0f766e] via-[#0f9f8a] to-[#14b8a6] p-0 text-white shadow-[0_10px_24px_rgba(20,184,166,0.28)] transition-all duration-200 hover:scale-[1.02] hover:from-[#115e59] hover:via-[#0f766e] hover:to-[#0d9488] active:scale-95 disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:hover:scale-100";
 
   function toEditableDescription(value?: string | null) {
     return stripHistoryMeta(stripRecurringTaskMeta(value)).replace(AUTO_PREDICTION_TEXT, "").trim();
@@ -99,8 +107,9 @@ export function TaskManageControls({
     router.refresh();
   }
 
-  async function markTaskDone() {
-    setMarkingDone(true);
+  async function moveTaskToHistory(options?: { skipDialogClose?: boolean; silent?: boolean }) {
+    const setBusy = options?.skipDialogClose ? setMovingToHistory : setMarkingDone;
+    setBusy(true);
     const response = await fetch(`/api/dashboard/tasks/${task.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -108,16 +117,29 @@ export function TaskManageControls({
     });
     const raw = await response.text();
     const result = parseResponse(raw);
-    setMarkingDone(false);
+    setBusy(false);
 
     if (!response.ok) {
       toast.error(result.message);
       return;
     }
 
-    toast.success(result.message);
-    setDoneOpen(false);
+    if (!options?.silent) {
+      toast.success(result.message);
+    }
+
+    dispatchDashboardTasksRemoved([{ id: task.id, taskTitle: task.taskTitle }]);
+
+    if (!options?.skipDialogClose) {
+      setDoneOpen(false);
+    }
+
+    onMovedToHistory?.(task.id);
     router.refresh();
+  }
+
+  async function markTaskDone() {
+    await moveTaskToHistory();
   }
 
   async function deleteTask() {
@@ -135,6 +157,7 @@ export function TaskManageControls({
     }
 
     toast.success(result.message);
+    dispatchDashboardTasksRemoved([{ id: task.id, taskTitle: task.taskTitle }]);
     setEditOpen(false);
     router.refresh();
   }
@@ -270,6 +293,21 @@ export function TaskManageControls({
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
+      ) : null}
+
+      {showArchiveAction && compact && !isAlreadyMovedToHistory ? (
+        <Button
+          aria-label="Move task to history"
+          className={quickMoveButtonClass}
+          disabled={movingToHistory || saving || deleting}
+          onClick={() => void moveTaskToHistory({ skipDialogClose: true })}
+          size="icon"
+          title="Move this task to history"
+          type="button"
+          variant="default"
+        >
+          <Archive className="h-3.5 w-3.5" />
+        </Button>
       ) : null}
 
       {!hideDoneAction ? (
