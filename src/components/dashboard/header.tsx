@@ -146,6 +146,8 @@ export function DashboardHeader({
     label: "",
     date: "",
   });
+  const [clockHour = "--", clockMinute = "--", clockSecond = "--"] = (currentClock.time || "--:--:--").split(":");
+  const clockLeadingTime = `${clockHour}:${clockMinute}:`;
   const visibleUnreadMessages =
     pathname === "/dashboard/messages" ? 0 : unreadMessages;
   const visibleBellNotifications = notificationsHydrated ? requestNotifications + assignmentNotifications + noticeNotifications : 0;
@@ -499,10 +501,21 @@ export function DashboardHeader({
       >
         <ThemeToggle className="hidden h-12 w-12 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] text-[var(--foreground)] shadow-[0_10px_24px_rgba(148,163,184,0.14)] hover:bg-[var(--panel-alt)] md:inline-flex" />
         <div className="hidden items-center gap-2 text-[var(--foreground)] md:flex">
-            <Clock3 className="h-4 w-4 text-[var(--muted-foreground)]" />
+          <Clock3 className="h-4 w-4 text-[var(--muted-foreground)]" />
           <div className="flex items-center gap-2 font-mono tabular-nums">
-            <span className="min-w-[168px] text-[2rem] font-extrabold leading-none tracking-[0.08em] text-[var(--foreground)]">
-              {currentClock.time}
+            <span className="inline-flex min-w-[172px] items-center text-[2rem] font-extrabold leading-none tracking-[0.08em] text-[var(--foreground)]">
+              <span>{clockLeadingTime}</span>
+              <span className="relative inline-flex h-[1.1em] w-[2.4ch] overflow-hidden">
+                <motion.span
+                  animate={{ y: 0, opacity: 1 }}
+                  className="absolute inset-0 inline-flex items-center justify-start"
+                  initial={{ y: 10, opacity: 0 }}
+                  key={clockSecond}
+                  transition={{ duration: 0.22, ease: "easeOut" }}
+                >
+                  {clockSecond}
+                </motion.span>
+              </span>
             </span>
             <span className="min-w-[32px] text-[1.05rem] font-bold leading-none tracking-[0.08em] text-[#4f5ef7]">
               {currentClock.seconds}

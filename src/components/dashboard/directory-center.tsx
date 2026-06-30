@@ -132,6 +132,8 @@ function getContinuationSummary(description: string | null) {
     totalDays: Math.max(continuationMeta.daysActive || 0, continuationMeta.dailyLogs.length, 1),
     totalTrackedMinutes,
     lastWorked,
+    dailyLogs: continuationMeta.dailyLogs,
+    lastNote: continuationMeta.note,
   };
 }
 
@@ -354,6 +356,32 @@ export function DirectoryCenter({
                                   <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1">
                                     Overall {formatMinutes(continuationSummary.totalTrackedMinutes)}
                                   </span>
+                                </div>
+                              ) : null}
+
+                              {continuationSummary?.dailyLogs?.length ? (
+                                <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-700">
+                                    Daily Work Log
+                                  </p>
+                                  <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                    {continuationSummary.dailyLogs.map((entry) => (
+                                      <div
+                                        className="rounded-2xl border border-violet-200 bg-white px-3 py-2 text-xs text-slate-700"
+                                        key={`${task.id}-${entry.date}`}
+                                      >
+                                        <p className="font-semibold text-violet-700">{entry.date}</p>
+                                        <p className="mt-1">{entry.progress}% complete</p>
+                                        <p>{formatMinutes(entry.trackedMinutes)}</p>
+                                        <p className="mt-1 text-[var(--muted-foreground)]">{entry.note || "No note"}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {continuationSummary.lastNote ? (
+                                    <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+                                      Last note: {continuationSummary.lastNote}
+                                    </p>
+                                  ) : null}
                                 </div>
                               ) : null}
                             </div>

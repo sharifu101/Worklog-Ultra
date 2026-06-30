@@ -6,7 +6,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
+    "dev:turbopack": "next dev",
     "prebuild": "prisma generate",
     "build": "next build",
     "start": "next start -p 3000",

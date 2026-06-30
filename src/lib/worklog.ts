@@ -898,9 +898,29 @@ export async function getHistoryData(userId: string, from?: string, to?: string)
   const visibleTasks = tasks
     .filter((task) => {
       const isToday = toDateOnly(task.planDate) === toDateOnly();
+      const latestUpdate = task.updates[0] ?? null;
       const isStickyDashboardTask =
         Boolean(extractContinuationMeta(task.taskDescription)) || isRecurringTaskDescription(task.taskDescription);
       const archivedToHistory = isMovedToHistory(task.taskDescription);
+      const isCompleted =
+        latestUpdate?.status === TaskStatus.done ||
+        latestUpdate?.completionPercent === 100 ||
+        Boolean(latestUpdate?.actualEnd);
+      const hasWorkEvidence = Boolean(
+        latestUpdate?.actualStart ||
+          latestUpdate?.actualEnd ||
+          (latestUpdate?.trackedMinutes ?? 0) > 0 ||
+          (latestUpdate?.completionPercent ?? 0) > 0 ||
+          latestUpdate?.note?.trim(),
+      );
+
+      if (isToday && !archivedToHistory && !isCompleted) {
+        return false;
+      }
+
+      if (!isToday && !archivedToHistory && !isCompleted && !hasWorkEvidence) {
+        return false;
+      }
 
       return !(isToday && isStickyDashboardTask && !archivedToHistory);
     })
@@ -1031,11 +1051,38 @@ export async function getTeamData(role: UserRole, departmentId?: string | null, 
   });
 }
 
-export async function getAdminOverview() {
+export async function getAdminOverview(viewer?: {
+  role: UserRole;
+  departmentId?: string | null;
+}) {
+  const scopeToDepartment = viewer?.role === UserRole.manager && viewer.departmentId;
+  const visibleRoles =
+    viewer?.role === UserRole.manager
+      ? [UserRole.employee, UserRole.hr, UserRole.manager]
+      : undefined;
+  const userWhere = {
+    ...(scopeToDepartment ? { departmentId: viewer?.departmentId } : {}),
+    ...(visibleRoles ? { role: { in: visibleRoles } } : {}),
+  };
+  const departmentWhere = scopeToDepartment ? { id: viewer?.departmentId ?? undefined } : undefined;
+  const reportWhere = scopeToDepartment
+    ? {
+        dailyTask: {
+          departmentId: viewer?.departmentId ?? undefined,
+        },
+      }
+    : undefined;
+  const planWhere = scopeToDepartment ? { departmentId: viewer?.departmentId ?? undefined } : undefined;
+
   const [users, departments, reports, plans] = await Promise.all([
-    db.user.findMany({ include: { department: true }, orderBy: [{ isActive: "desc" }, { createdAt: "desc" }] }),
-    db.department.findMany({ orderBy: { name: "asc" } }),
+    db.user.findMany({
+      where: userWhere,
+      include: { department: true },
+      orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
+    }),
+    db.department.findMany({ where: departmentWhere, orderBy: { name: "asc" } }),
     db.dailyTaskUpdate.findMany({
+      where: reportWhere,
       include: {
         dailyTask: { include: { user: true, department: true } },
       },
@@ -1043,6 +1090,7 @@ export async function getAdminOverview() {
       take: 25,
     }),
     db.dailyTask.findMany({
+      where: planWhere,
       include: { user: true, department: true, updates: true },
       orderBy: { createdAt: "desc" },
       take: 25,

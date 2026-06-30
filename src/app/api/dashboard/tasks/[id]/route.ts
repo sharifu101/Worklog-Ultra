@@ -17,6 +17,25 @@ const TASK_ACTIONS = [
   "complete_task",
 ] as const;
 
+function buildTaskVisibilityWhere(actor: Awaited<ReturnType<typeof requireUser>>) {
+  if (actor.role === UserRole.employee) {
+    return { userId: actor.id };
+  }
+
+  if (actor.role === UserRole.manager) {
+    return actor.departmentId
+      ? {
+          OR: [
+            { userId: actor.id },
+            { departmentId: actor.departmentId },
+          ],
+        }
+      : { userId: actor.id };
+  }
+
+  return {};
+}
+
 async function clearAutoContinuationTask(task: {
   userId: string;
   planDate: Date;
@@ -45,11 +64,7 @@ async function findVisibleTask(id: string, actor: Awaited<ReturnType<typeof requ
   return db.dailyTask.findFirst({
     where: {
       id,
-      ...(actor.role === UserRole.employee
-        ? { userId: actor.id }
-        : actor.role === UserRole.manager && actor.departmentId
-          ? { departmentId: actor.departmentId }
-          : {}),
+      ...buildTaskVisibilityWhere(actor),
     },
   });
 }
@@ -107,11 +122,7 @@ export async function POST(
   const task = await db.dailyTask.findFirst({
     where: {
       id,
-      ...(user.role === UserRole.employee
-        ? { userId: user.id }
-        : user.role === UserRole.manager && user.departmentId
-          ? { departmentId: user.departmentId }
-          : {}),
+      ...buildTaskVisibilityWhere(user),
     },
     select: {
       id: true,
@@ -207,20 +218,21 @@ export async function POST(
       },
     });
 
-    await db.dailyTask.update({
-      where: { id: task.id },
-      data: {
-        taskDescription: embedHistoryMeta(task.taskDescription),
-      },
-    });
-
     await clearAutoContinuationTask(task);
 
     let followUpTaskId: string | null = null;
 
     if (wantsFollowUp) {
-      const followUpDescription = buildFollowUpDescription({
+      const continuationDescription = buildContinuationDescription({
         originalDescription: stripHistoryMeta(task.taskDescription),
+        sourceDate: toDateOnly(task.planDate),
+        completionPercent,
+        trackedMinutes,
+        note: completionNote,
+      });
+
+      const followUpDescription = buildFollowUpDescription({
+        originalDescription: continuationDescription,
         sourceTaskId: task.id,
         scheduledDate: followUpDate,
         scheduledTime: followUpTime,
@@ -279,6 +291,7 @@ export async function POST(
 
   if (action === "move_to_history") {
     const reportDate = new Date(task.planDate);
+    const resolvedActualEnd = latestUpdate?.actualEnd ?? new Date();
 
     if (latestUpdate) {
       await db.dailyTaskUpdate.update({
@@ -291,7 +304,7 @@ export async function POST(
         data: {
           status: "done",
           completionPercent: latestUpdate.completionPercent > 0 ? latestUpdate.completionPercent : 100,
-          actualEnd: latestUpdate.actualEnd,
+          actualEnd: resolvedActualEnd,
         },
       });
     } else {
@@ -304,7 +317,7 @@ export async function POST(
           completionPercent: 100,
           trackedMinutes: 0,
           actualStart: null,
-          actualEnd: null,
+          actualEnd: resolvedActualEnd,
           difficultyLevel: null,
         },
       });

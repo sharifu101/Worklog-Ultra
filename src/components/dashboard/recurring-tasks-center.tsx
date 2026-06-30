@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 type Department = { id: string; name: string };
 
 export function RecurringTasksCenter({
-  currentUserId: _currentUserId,
+  currentUserId,
   departments = [],
   userDepartmentId,
   allowOtherDepartment,
@@ -48,8 +48,8 @@ export function RecurringTasksCenter({
   const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
-    setTemplates(readRecurringTemplates());
-  }, []);
+    setTemplates(readRecurringTemplates(currentUserId));
+  }, [currentUserId]);
 
   const canSave = taskTitle.trim().length > 0 && departmentId.length > 0;
   const departmentName = useMemo(
@@ -78,7 +78,7 @@ export function RecurringTasksCenter({
       monthlyDay: Math.min(31, Math.max(1, Number(monthlyDay) || 1)),
       startDate,
       endDate,
-    });
+    }, currentUserId);
 
     setTemplates(next);
     setTaskTitle("");
@@ -96,7 +96,7 @@ export function RecurringTasksCenter({
   }
 
   function handleDelete(templateId: string) {
-    setTemplates(deleteRecurringTemplate(templateId));
+    setTemplates(deleteRecurringTemplate(templateId, currentUserId));
     toast.success("Recurring task deleted.");
   }
 

@@ -11,7 +11,10 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
   const actor = await requireAdminOrManager();
-  const { users, departments } = await getAdminOverview();
+  const { users, departments } = await getAdminOverview({
+    role: actor.role,
+    departmentId: actor.departmentId,
+  });
 
   return (
     <Card>
