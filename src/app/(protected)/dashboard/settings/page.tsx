@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProfileSettingsForm } from "@/components/settings/profile-settings-form";
 import { requireUser } from "@/lib/auth/server";
-import { roleUiTitle } from "@/lib/auth/roles";
+import { toProfileSettingsUser } from "@/lib/contracts/user";
 import { getDepartments } from "@/lib/worklog";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const user = await requireUser();
   const departments = await getDepartments();
-  const avatarUrl = user.avatarUrl ?? null;
-  const resolvedAvatarUrl = avatarUrl || null;
+  const profileUser = toProfileSettingsUser(user);
+  const resolvedAvatarUrl = profileUser.avatarUrl || null;
 
   return (
     <div className="grid gap-5 xl:grid-cols-[360px_1fr]">
@@ -28,7 +28,7 @@ export default async function SettingsPage() {
             </Avatar>
             <div>
               <p className="text-lg font-semibold text-white">{user.name}</p>
-              <p className="text-sm text-[var(--muted-foreground)]">{roleUiTitle(user.role)}</p>
+              <p className="text-sm text-[var(--muted-foreground)]">{profileUser.displayRole}</p>
               <p className="text-sm text-[var(--muted-foreground)]">{user.department?.name ?? "Executive Office"}</p>
             </div>
           </div>
@@ -47,23 +47,7 @@ export default async function SettingsPage() {
           <CardDescription>These settings affect how your account appears across the enterprise system.</CardDescription>
         </CardHeader>
         <CardContent>
-          <ProfileSettingsForm
-            departments={departments}
-            user={{
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              displayRole: roleUiTitle(user.role),
-              designation: user.designation,
-              phone: user.phone,
-              location: user.location,
-              avatar_url: avatarUrl,
-              avatarUrl,
-              monthlySalary: user.monthlySalary ? Number(user.monthlySalary) : null,
-              expectedDailyHours: user.expectedDailyHours ? Number(user.expectedDailyHours) : 8,
-              departmentId: user.departmentId,
-            }}
-          />
+          <ProfileSettingsForm departments={departments} user={profileUser} />
         </CardContent>
       </Card>
     </div>

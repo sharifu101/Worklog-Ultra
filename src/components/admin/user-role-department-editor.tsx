@@ -6,11 +6,7 @@ import { toast } from "sonner";
 import { EXTRA_ACCESS_OPTIONS, type ExtraAccessKey } from "@/lib/auth/permissions";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-type DepartmentOption = {
-  id: string;
-  name: string;
-};
+import type { DepartmentOption } from "@/lib/contracts/user";
 
 const ROLE_OPTIONS = [
   { value: "employee", label: "Employee" },

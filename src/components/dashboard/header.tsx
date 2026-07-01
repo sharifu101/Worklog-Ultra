@@ -10,6 +10,7 @@ import { MobileSidebar } from "@/components/dashboard/sidebar";
 import { DashboardWorkdayTimer } from "@/components/dashboard/dashboard-workday-timer";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { DashboardHeaderUser } from "@/lib/contracts/user";
 
 type AssignmentNotificationItem = {
   taskId: string;
@@ -47,8 +48,8 @@ type RequestNotificationItem = {
   reviewerName?: string;
 };
 
-function getUserAvatarUrl(user: { avatarUrl?: string | null; avatar_url?: string | null }) {
-  return user.avatarUrl || user.avatar_url || "";
+function getUserAvatarUrl(user: { avatarUrl?: string | null }) {
+  return user.avatarUrl || "";
 }
 
 type NotificationDetail =
@@ -98,25 +99,7 @@ function getRequestReadKey(item: RequestNotificationItem) {
 export function DashboardHeader({
   user,
 }: {
-  user: {
-    name: string;
-    role: "employee" | "hr" | "manager" | "admin";
-    roleTitle: string;
-    designation: string | null;
-    avatar_url?: string | null;
-    avatarUrl?: string | null;
-    unreadMessages: number;
-    requestNotifications: number;
-    assignmentNotifications: number;
-    noticeNotifications: number;
-    attendanceSnapshot: {
-      status: "present" | "late" | "half_day" | "absent" | "remote";
-      note: string;
-      breakMinutes: number;
-      checkInAt: string | null;
-      checkOutAt: string | null;
-    } | null;
-  };
+  user: DashboardHeaderUser;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -489,7 +472,7 @@ export function DashboardHeader({
           name: user.name,
           role: user.role,
           designation: user.designation,
-          avatarUrl: user.avatarUrl ?? user.avatar_url,
+          avatarUrl: user.avatarUrl,
         }}
       />
       <div className="flex-1" />

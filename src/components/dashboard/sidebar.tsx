@@ -10,6 +10,7 @@ import { roleUiTitle } from "@/lib/auth/roles";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { DashboardSidebarUser } from "@/lib/contracts/user";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -25,16 +26,6 @@ const navItems = [
   { href: "/admin/departments", icon: FolderTree, label: "Departments" },
 ];
 
-type SidebarUser = {
-  name: string;
-  role: "employee" | "hr" | "manager" | "admin";
-  designation: string | null;
-  avatar_url?: string | null;
-  avatarUrl?: string | null;
-  extraAccess?: string[];
-  assignmentNotifications?: number;
-};
-
 function getInitials(name: string) {
   return name
     .split(" ")
@@ -49,12 +40,12 @@ function SidebarContent({
   pathname,
   mobile = false,
 }: {
-  user: SidebarUser;
+  user: DashboardSidebarUser;
   pathname: string;
   mobile?: boolean;
 }) {
   const router = useRouter();
-  const resolvedAvatarUrl = user.avatarUrl || user.avatar_url || "";
+  const resolvedAvatarUrl = user.avatarUrl || "";
 
   async function logout() {
     const response = await fetch("/api/auth/logout", { method: "POST" });
@@ -162,7 +153,7 @@ function SidebarContent({
   return navNode;
 }
 
-export function Sidebar({ user }: { user: SidebarUser }) {
+export function Sidebar({ user }: { user: DashboardSidebarUser }) {
   const pathname = usePathname();
 
   return (
@@ -177,7 +168,7 @@ export function Sidebar({ user }: { user: SidebarUser }) {
   );
 }
 
-export function MobileSidebar({ user }: { user: SidebarUser }) {
+export function MobileSidebar({ user }: { user: DashboardSidebarUser }) {
   const pathname = usePathname();
 
   return (
