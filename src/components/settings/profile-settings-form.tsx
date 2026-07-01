@@ -9,34 +9,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-type Department = { id: string; name: string };
+import type { DepartmentOption, ProfileSettingsUser, ProfileUpdatePayload, ProfileUpdateResponse } from "@/lib/contracts/user";
 
 export function ProfileSettingsForm({
   user,
   departments = [],
 }: {
-  user: {
-    name: string;
-    email: string;
-    role: string;
-    displayRole: string;
-    designation: string | null;
-    phone: string | null;
-    location: string | null;
-    avatar_url: string | null;
-    avatarUrl?: string | null;
-    monthlySalary: number | null;
-    expectedDailyHours: number | null;
-    departmentId: string | null;
-  };
-  departments: Department[];
+  user: ProfileSettingsUser;
+  departments: DepartmentOption[];
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [departmentId, setDepartmentId] = useState(user.departmentId ?? "__none__");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? user.avatar_url ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? "");
   const avatarPreview = useMemo(() => (avatarFile ? URL.createObjectURL(avatarFile) : avatarUrl), [avatarFile, avatarUrl]);
 
   useEffect(() => {
@@ -69,18 +55,18 @@ export function ProfileSettingsForm({
         return;
       }
 
-      const uploadedAvatarUrl = uploadResult.avatarUrl ?? uploadResult.avatar_url ?? "";
+      const uploadedAvatarUrl = uploadResult.avatarUrl ?? "";
       nextAvatarUrl = uploadedAvatarUrl;
       setAvatarUrl(uploadedAvatarUrl);
       setAvatarFile(null);
     }
 
-    const payload = {
+    const payload: ProfileUpdatePayload = {
       name: String(formData.get("name") ?? ""),
       designation: String(formData.get("designation") ?? ""),
       phone: String(formData.get("phone") ?? ""),
       location: String(formData.get("location") ?? ""),
-      avatar_url: nextAvatarUrl,
+      avatarUrl: nextAvatarUrl,
       monthlySalary: undefined,
       expectedDailyHours: undefined,
       departmentId: departmentId === "__none__" ? null : departmentId,
@@ -93,7 +79,9 @@ export function ProfileSettingsForm({
     });
 
     const raw = await response.text();
-    const result = raw ? JSON.parse(raw) : { message: "Profile update failed." };
+    const result: ProfileUpdateResponse | { message: string } = raw
+      ? JSON.parse(raw)
+      : { message: "Profile update failed." };
     setLoading(false);
 
     if (!response.ok) {
@@ -101,7 +89,8 @@ export function ProfileSettingsForm({
       return;
     }
 
-    setAvatarUrl(result?.user?.avatarUrl ?? result?.user?.avatar_url ?? nextAvatarUrl);
+    const updatedAvatarUrl = "user" in result ? result.user.avatarUrl ?? nextAvatarUrl : nextAvatarUrl;
+    setAvatarUrl(updatedAvatarUrl);
     setAvatarFile(null);
     toast.success(result.message);
     router.refresh();

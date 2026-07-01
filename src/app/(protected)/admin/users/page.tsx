@@ -4,6 +4,7 @@ import { UserStatusToggle } from "@/components/admin/user-status-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { roleUiTitle } from "@/lib/auth/roles";
+import type { DepartmentOption } from "@/lib/contracts/user";
 import { requireAdminOrManager } from "@/lib/auth/server";
 import { getAdminOverview } from "@/lib/worklog";
 
@@ -15,6 +16,10 @@ export default async function AdminUsersPage() {
     role: actor.role,
     departmentId: actor.departmentId,
   });
+  const departmentOptions: DepartmentOption[] = (departments ?? []).map((department) => ({
+    id: department.id,
+    name: department.name,
+  }));
 
   return (
     <Card>
@@ -40,10 +45,7 @@ export default async function AdminUsersPage() {
                       <UserRoleDepartmentEditor
                         allowAccessEdit={actor.role === "admin"}
                         allowRoleEdit={actor.role === "admin"}
-                        departments={(departments ?? []).map((department) => ({
-                          id: department.id,
-                          name: department.name,
-                        }))}
+                        departments={departmentOptions}
                         disabled={user.id === actor.id}
                         initialDepartmentId={user.departmentId}
                         initialExtraAccess={user.extraAccess}

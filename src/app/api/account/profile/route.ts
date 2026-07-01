@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess } from "@/lib/api";
 import { requireUser } from "@/lib/auth/server";
+import type { ProfileUpdateResponse } from "@/lib/contracts/user";
 import { roleNeedsDepartment } from "@/lib/auth/access";
 import { db } from "@/lib/db";
 import { updateProfileSchema } from "@/lib/validators/profile";
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   const payload = parsed.data;
   const departmentId = payload.departmentId || null;
-  const nextAvatarUrl = sanitizeAvatarUrl(payload.avatar_url ?? null) || user.avatarUrl || "";
+  const nextAvatarUrl = sanitizeAvatarUrl(payload.avatarUrl ?? null) || user.avatarUrl || "";
 
   if (roleNeedsDepartment(user.role) && !departmentId) {
     return apiError("Department is required for this account.");
@@ -59,15 +60,16 @@ export async function POST(request: NextRequest) {
     console.log("[profile] saved avatar URL:", updatedUser.avatarUrl);
   }
 
-  return apiSuccess({
+  const result: ProfileUpdateResponse = {
     message: "Profile updated successfully.",
     user: {
       name: updatedUser.name,
       avatarUrl: updatedUser.avatarUrl,
-      avatar_url: updatedUser.avatarUrl,
       designation: updatedUser.designation,
       department: updatedUser.department?.name ?? null,
     },
     avatarUrl: updatedUser.avatarUrl,
-  });
+  };
+
+  return apiSuccess(result);
 }
