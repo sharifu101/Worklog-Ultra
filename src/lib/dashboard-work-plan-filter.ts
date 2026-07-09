@@ -1,5 +1,6 @@
 import { isMovedToHistory } from "@/lib/task-history-shared";
 import { extractFollowUpMeta } from "@/lib/task-follow-up";
+import { isRecurringTaskDescription } from "@/lib/recurring-task-templates";
 import { toDateOnly } from "@/lib/utils";
 
 type WorkPlanTaskUpdate = {
@@ -42,7 +43,12 @@ export function isVisibleInTodaysWorkPlan(task: WorkPlanTaskLike, date = toDateO
     return followUp.scheduledDate === date;
   }
 
-  return true;
+  const isPlannedForToday = toDateOnly(task.planDate) === date;
+  if (isPlannedForToday) {
+    return true;
+  }
+
+  return isRecurringTaskDescription(task.taskDescription);
 }
 
 export function filterTodaysWorkPlanTasks<T extends WorkPlanTaskLike>(tasks: T[], date = toDateOnly()) {
