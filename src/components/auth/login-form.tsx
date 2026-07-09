@@ -12,12 +12,24 @@ import { parseApiResponse } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { safeRedirect } from "@/lib/utils";
 
+const REMEMBERED_EMAIL_STORAGE_KEY = "worklog-remembered-email";
+
+function getRememberedEmail() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return window.localStorage.getItem(REMEMBERED_EMAIL_STORAGE_KEY) ?? "";
+}
+
 export function LoginForm({ variant = "default" }: { variant?: "default" | "minimal" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState(() => getRememberedEmail());
+  const [rememberMe, setRememberMe] = useState(() => Boolean(getRememberedEmail()));
   const isMinimal = variant === "minimal";
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -46,6 +58,12 @@ export function LoginForm({ variant = "default" }: { variant?: "default" | "mini
       return;
     }
 
+    if (payload.remember) {
+      window.localStorage.setItem(REMEMBERED_EMAIL_STORAGE_KEY, payload.email);
+    } else {
+      window.localStorage.removeItem(REMEMBERED_EMAIL_STORAGE_KEY);
+    }
+
     setErrorMessage("");
     toast.success(result.message);
     router.push(safeRedirect(searchParams.get("next")));
@@ -70,7 +88,11 @@ export function LoginForm({ variant = "default" }: { variant?: "default" | "mini
                 "h-11 rounded-lg border border-slate-700/45 bg-white/16 px-3 pl-11 text-base text-slate-900 placeholder:text-slate-600 shadow-none transition-colors hover:border-slate-800/70 focus:border-slate-900",
             )}
             name="email"
-            onChange={() => setErrorMessage("")}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setErrorMessage("");
+            }}
+            value={email}
             type="email"
             placeholder="Email ID"
           />
@@ -124,8 +146,16 @@ export function LoginForm({ variant = "default" }: { variant?: "default" | "mini
         <label className={cn("flex items-center gap-2", isMinimal && "text-slate-700")}>
           <input
             className="h-3.5 w-3.5 accent-slate-900"
-            defaultChecked={false}
+            checked={rememberMe}
             name="remember"
+            onChange={(event) => {
+              const nextRememberMe = event.target.checked;
+              setRememberMe(nextRememberMe);
+
+              if (!nextRememberMe) {
+                window.localStorage.removeItem(REMEMBERED_EMAIL_STORAGE_KEY);
+              }
+            }}
             type="checkbox"
           />
           <span>Remember me</span>

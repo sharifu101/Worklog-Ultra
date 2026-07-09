@@ -114,6 +114,10 @@ export async function POST(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   const action = typeof body?.action === "string" ? body.action : "";
+  const actionReportDate =
+    typeof body?.reportDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.reportDate)
+      ? new Date(body.reportDate)
+      : new Date(toDateOnly());
 
   if (!TASK_ACTIONS.includes(action as (typeof TASK_ACTIONS)[number])) {
     return apiError("Invalid task action.", 400);
@@ -188,7 +192,7 @@ export async function POST(
     }
 
     const completionPercent = completionStatus === "partial" ? 50 : 100;
-    const reportDate = new Date(task.planDate);
+    const reportDate = actionReportDate;
 
     await db.dailyTaskUpdate.upsert({
       where: {
@@ -225,7 +229,7 @@ export async function POST(
     if (wantsFollowUp) {
       const continuationDescription = buildContinuationDescription({
         originalDescription: stripHistoryMeta(task.taskDescription),
-        sourceDate: toDateOnly(task.planDate),
+        sourceDate: toDateOnly(reportDate),
         completionPercent,
         trackedMinutes,
         note: completionNote,
@@ -290,38 +294,35 @@ export async function POST(
   }
 
   if (action === "move_to_history") {
-    const reportDate = new Date(task.planDate);
+    const reportDate = actionReportDate;
     const resolvedActualEnd = latestUpdate?.actualEnd ?? new Date();
-
-    if (latestUpdate) {
-      await db.dailyTaskUpdate.update({
-        where: {
-          dailyTaskId_reportDate: {
-            dailyTaskId: task.id,
-            reportDate,
-          },
-        },
-        data: {
-          status: "done",
-          completionPercent: latestUpdate.completionPercent > 0 ? latestUpdate.completionPercent : 100,
-          actualEnd: resolvedActualEnd,
-        },
-      });
-    } else {
-      await db.dailyTaskUpdate.create({
-        data: {
+    await db.dailyTaskUpdate.upsert({
+      where: {
+        dailyTaskId_reportDate: {
           dailyTaskId: task.id,
           reportDate,
-          status: "done",
-          note: null,
-          completionPercent: 100,
-          trackedMinutes: 0,
-          actualStart: null,
-          actualEnd: resolvedActualEnd,
-          difficultyLevel: null,
         },
-      });
-    }
+      },
+      update: {
+        status: "done",
+        note: latestUpdate?.note ?? null,
+        completionPercent: latestUpdate?.completionPercent && latestUpdate.completionPercent > 0 ? latestUpdate.completionPercent : 100,
+        trackedMinutes: latestUpdate?.trackedMinutes ?? 0,
+        actualStart: latestUpdate?.actualStart ?? null,
+        actualEnd: resolvedActualEnd,
+      },
+      create: {
+        dailyTaskId: task.id,
+        reportDate,
+        status: "done",
+        note: latestUpdate?.note ?? null,
+        completionPercent: latestUpdate?.completionPercent && latestUpdate.completionPercent > 0 ? latestUpdate.completionPercent : 100,
+        trackedMinutes: latestUpdate?.trackedMinutes ?? 0,
+        actualStart: latestUpdate?.actualStart ?? null,
+        actualEnd: resolvedActualEnd,
+        difficultyLevel: latestUpdate?.difficultyLevel ?? null,
+      },
+    });
 
     await db.dailyTask.update({
       where: { id: task.id },
@@ -350,7 +351,7 @@ export async function POST(
           where: {
             dailyTaskId_reportDate: {
               dailyTaskId: task.id,
-              reportDate: new Date(task.planDate),
+              reportDate: new Date(today),
             },
           },
           data: {

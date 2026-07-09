@@ -1,5 +1,5 @@
 import { DirectoryCenter } from "@/components/dashboard/directory-center";
-import { canAccessWorkMonitor, shouldScopePrivilegedViewsToDepartment } from "@/lib/auth/permissions";
+import { canAccessWorkMonitor } from "@/lib/auth/permissions";
 import { requireUser } from "@/lib/auth/server";
 import { getWorkspaceDirectoryData } from "@/lib/worklog";
 import { redirect } from "next/navigation";
@@ -21,14 +21,18 @@ export default async function DirectoryPage({
   const data = await getWorkspaceDirectoryData({
     role: user.role,
     departmentId: user.departmentId,
-    scopeToDepartment: shouldScopePrivilegedViewsToDepartment(user),
+    scopeToDepartment: user.role === "employee",
   });
 
   return (
     <DirectoryCenter
-      canSwitchDepartment={user.role === "admin"}
+      canSwitchDepartment={user.role === "manager" || user.role === "admin"}
       departments={data.departments ?? []}
-      initialDepartmentId={user.role === "admin" && !shouldScopePrivilegedViewsToDepartment(user) ? params?.departmentId : data.departments[0]?.id}
+      initialDepartmentId={
+        user.role === "manager" || user.role === "admin"
+          ? params?.departmentId ?? "all"
+          : data.departments[0]?.id
+      }
       initialUserId={params?.userId}
       users={data.users ?? []}
     />

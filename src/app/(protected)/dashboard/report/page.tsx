@@ -93,7 +93,7 @@ export default async function ReportPage({
           </div>
           <form
             action="/dashboard/report"
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[160px_160px_auto_auto]"
+            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[160px_160px_auto_auto]"
             method="get"
           >
             <div>
@@ -133,7 +133,7 @@ export default async function ReportPage({
           </form>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
             <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Tasks</p>
               <p className="mt-2 text-2xl font-bold text-[var(--foreground)]">{summary.totals.totalTasks}</p>
@@ -153,7 +153,7 @@ export default async function ReportPage({
           </div>
 
           <div className="overflow-hidden rounded-[24px] border border-[var(--panel-border)]">
-            <div className="grid grid-cols-[120px_minmax(0,1.2fr)_120px_120px] gap-3 bg-[var(--panel-muted)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
+            <div className="hidden gap-3 bg-[var(--panel-muted)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--muted-foreground)] md:grid md:grid-cols-[120px_minmax(0,1.2fr)_120px_120px]">
               <span>Date</span>
               <span>Task</span>
               <span>Status</span>
@@ -162,25 +162,30 @@ export default async function ReportPage({
             <div className="divide-y divide-[var(--panel-border)]">
               {summary.items.length ? (
                 summary.items.map((item) => (
-                  <div className="grid grid-cols-[120px_minmax(0,1.2fr)_120px_120px] gap-3 px-4 py-3" key={item.id}>
+                  <div className="px-4 py-3 md:grid md:grid-cols-[120px_minmax(0,1.2fr)_120px_120px] md:gap-3" key={item.id}>
                     <p className="text-sm font-medium text-[var(--muted-foreground)]">{item.date}</p>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[var(--foreground)]">{item.title}</p>
-                      <p className="mt-1 truncate text-xs text-[var(--muted-foreground)]">
-                        {[item.departmentName, item.description || item.note || "No extra details"].join(" • ")}
+                    <div className="mt-2 min-w-0 md:mt-0">
+                      <div className="flex flex-wrap items-center gap-2 md:block">
+                        <p className="text-sm font-semibold text-[var(--foreground)] md:truncate">{item.title}</p>
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold md:hidden ${statusTone(item.status)}`}>
+                          {statusLabel(item.status)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-[var(--muted-foreground)] md:truncate">
+                        {[item.departmentName, item.description || item.note || "No extra details"].join(" - ")}
                       </p>
                     </div>
-                    <div>
+                    <div className="mt-3 hidden md:mt-0 md:block">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusTone(item.status)}`}>
                         {statusLabel(item.status)}
                       </span>
                     </div>
-                    <p className="text-sm font-semibold text-[var(--foreground)]">{formatMinutes(item.trackedMinutes)}</p>
+                    <p className="mt-3 text-sm font-semibold text-[var(--foreground)] md:mt-0">{formatMinutes(item.trackedMinutes)}</p>
                   </div>
                 ))
               ) : (
                 <div className="px-4 py-8 text-center text-sm text-[var(--muted-foreground)]">
-                No report data found for the selected date range.
+                  No report data found for the selected date range.
                 </div>
               )}
             </div>

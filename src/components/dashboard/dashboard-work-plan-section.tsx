@@ -236,7 +236,7 @@ const TaskTimerActionWrapper = ({
       afterDoneSlot={afterDoneSlot}
       onDoneClick={handleDone}
       onSnapshotChange={handleSnapshot}
-      reportDate={toDateOnly(task.planDate)}
+      reportDate={toDateOnly()}
       taskId={task.id}
     />
   );
@@ -461,6 +461,7 @@ export function DashboardWorkPlanSection({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "complete_task",
+        reportDate: toDateOnly(),
         completionStatus: payload.completionStatus,
         completionNote: payload.completionNote,
         needFollowUp: payload.needFollowUp,
@@ -612,21 +613,21 @@ export function DashboardWorkPlanSection({
                   key={task.id}
                 >
                   <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-start 2xl:justify-between">
                       <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="break-words text-sm font-semibold leading-6 text-[var(--foreground)]">{task.taskTitle}</h3>
-                        {followUpMeta ? (
-                          <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
-                            Follow-up
-                          </span>
-                        ) : null}
-                        {continuationMeta ? (
-                          <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">
-                            Continued
-                          </span>
-                        ) : null}
-                      </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="break-words text-sm font-semibold leading-6 text-[var(--foreground)]">{task.taskTitle}</h3>
+                          {followUpMeta ? (
+                            <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
+                              Follow-up
+                            </span>
+                          ) : null}
+                          {continuationMeta ? (
+                            <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-sky-700">
+                              Continued
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="text-xs text-[var(--muted-foreground)]">{task.departmentName}</p>
 
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -642,7 +643,7 @@ export function DashboardWorkPlanSection({
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-start sm:gap-1 xl:max-w-max xl:shrink-0 xl:justify-end">
+                      <div className="w-full max-w-full 2xl:w-auto 2xl:max-w-[28rem] 2xl:shrink-0">
                         <TaskTimerActionWrapper
                           task={task}
                           canEdit={canEdit}
@@ -664,7 +665,7 @@ export function DashboardWorkPlanSection({
                           onDoneClick={handleDoneClick}
                           onSnapshotChange={handleSnapshotChange}
                         />
-                        <div className="flex items-center gap-1.5">
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
                           {task.assignedBy && task.userId === currentUserId ? (
                             <AssignmentReviewControls
                               latestReview={task.latestReview ?? null}

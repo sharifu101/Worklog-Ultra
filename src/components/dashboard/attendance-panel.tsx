@@ -19,7 +19,7 @@ type AttendanceItem = {
   name: string;
   email: string;
   role: string;
-  avatar_url?: string | null;
+  avatarUrl?: string | null;
   departmentName: string;
   attendance: {
     id: string;

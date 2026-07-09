@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { MobileSidebar } from "@/components/dashboard/sidebar";
 import { DashboardWorkdayTimer } from "@/components/dashboard/dashboard-workday-timer";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { DashboardHeaderUser } from "@/lib/contracts/user";
 
 type AssignmentNotificationItem = {
@@ -47,10 +46,6 @@ type RequestNotificationItem = {
   employeeDepartmentName?: string;
   reviewerName?: string;
 };
-
-function getUserAvatarUrl(user: { avatarUrl?: string | null }) {
-  return user.avatarUrl || "";
-}
 
 type NotificationDetail =
   | {
@@ -122,7 +117,6 @@ export function DashboardHeader({
   const [notificationDetail, setNotificationDetail] = useState<NotificationDetail | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const bellRef = useRef<HTMLDivElement | null>(null);
-  const resolvedAvatarUrl = getUserAvatarUrl(user);
   const clockRef = useRef({
     time: "",
     seconds: "",
@@ -462,7 +456,7 @@ export function DashboardHeader({
   return (
     <motion.header
       animate={{ opacity: 1, y: 0 }}
-      className="dashboard-topbar sticky top-0 z-20 flex items-center justify-between gap-4 px-4 py-4 xl:px-6"
+      className="dashboard-topbar sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 px-3 py-3 sm:px-4 sm:py-4 xl:px-6"
       data-page-section
       initial={{ opacity: 0, y: -16 }}
       transition={{ duration: 0.32, ease: "easeOut" }}
@@ -478,15 +472,15 @@ export function DashboardHeader({
       <div className="flex-1" />
       <motion.div
         animate={{ opacity: 1, x: 0 }}
-        className="ml-auto flex items-center gap-5"
+        className="ml-auto flex max-w-full items-center gap-2 sm:gap-3 lg:gap-4"
         initial={{ opacity: 0, x: 20 }}
         transition={{ delay: 0.08, duration: 0.36, ease: "easeOut" }}
       >
-        <ThemeToggle className="hidden h-12 w-12 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] text-[var(--foreground)] shadow-[0_10px_24px_rgba(148,163,184,0.14)] hover:bg-[var(--panel-alt)] md:inline-flex" />
-        <div className="hidden items-center gap-2 text-[var(--foreground)] md:flex">
+        <ThemeToggle className="hidden h-11 w-11 rounded-2xl border border-[var(--panel-border)] bg-[var(--panel)] text-[var(--foreground)] shadow-[0_10px_24px_rgba(148,163,184,0.14)] hover:bg-[var(--panel-alt)] lg:inline-flex" />
+        <div className="hidden items-center gap-2 text-[var(--foreground)] 2xl:flex">
           <Clock3 className="h-4 w-4 text-[var(--muted-foreground)]" />
           <div className="flex items-center gap-2 font-mono tabular-nums">
-            <span className="inline-flex min-w-[172px] items-center text-[2rem] font-extrabold leading-none tracking-[0.08em] text-[var(--foreground)]">
+            <span className="inline-flex min-w-[160px] items-center text-[1.75rem] font-extrabold leading-none tracking-[0.08em] text-[var(--foreground)]">
               <span>{clockLeadingTime}</span>
               <span className="relative inline-flex h-[1.1em] w-[2.4ch] overflow-hidden">
                 <motion.span
@@ -514,7 +508,7 @@ export function DashboardHeader({
           </div>
         </div>
         <Link
-          className="relative inline-flex h-10 w-10 items-center justify-center text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+          className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
           href="/dashboard/messages"
         >
           <MessageSquareMore className="h-5 w-5" />
@@ -526,7 +520,7 @@ export function DashboardHeader({
         </Link>
         <div className="relative" ref={bellRef}>
           <button
-            className="relative inline-flex h-10 w-10 items-center justify-center text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+            className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
             onClick={() => {
               setBellOpen((current) => !current);
               setNotificationDetail(null);
@@ -541,7 +535,7 @@ export function DashboardHeader({
             ) : null}
           </button>
           {bellOpen ? (
-            <div className="dashboard-header-popover absolute right-0 top-[calc(100%+12px)] z-30 w-[360px] rounded-3xl border border-[var(--panel-border)] bg-[var(--panel)] p-3 shadow-[0_18px_40px_rgba(15,23,42,0.14)]">
+            <div className="dashboard-header-popover absolute right-0 top-[calc(100%+12px)] z-30 w-[min(360px,calc(100vw-1.5rem))] rounded-3xl border border-[var(--panel-border)] bg-[var(--panel)] p-3 shadow-[0_18px_40px_rgba(15,23,42,0.14)] sm:w-[360px]">
               {notificationDetail ? (
                 <div className="space-y-3">
                   <button
@@ -657,16 +651,12 @@ export function DashboardHeader({
         </div>
         <div className="relative" ref={menuRef}>
           <button
-            className="flex items-center gap-3 rounded-2xl px-3 py-1.5 transition hover:bg-[var(--panel-alt)]"
+            className="flex max-w-[240px] items-center gap-2 rounded-2xl px-2 py-1.5 transition hover:bg-[var(--panel-alt)] sm:max-w-none sm:gap-3 sm:px-3"
             onClick={() => setMenuOpen((current) => !current)}
             type="button"
           >
-            <Avatar>
-              {resolvedAvatarUrl ? <AvatarImage alt={user.name} src={resolvedAvatarUrl} /> : null}
-              <AvatarFallback>{user.name.slice(0, 1)}</AvatarFallback>
-            </Avatar>
-            <div className="hidden text-left sm:block">
-              <p className="text-sm font-semibold text-[var(--foreground)]">{user.name}</p>
+            <div className="min-w-0 text-left">
+              <p className="truncate text-sm font-semibold text-[var(--foreground)]">{user.name}</p>
               <p className="text-xs text-[var(--muted-foreground)]">{user.designation ?? user.roleTitle}</p>
             </div>
             <ChevronDown className="h-4 w-4 text-[var(--muted-foreground)]" />

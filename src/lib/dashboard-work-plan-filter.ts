@@ -52,13 +52,13 @@ export function filterTodaysWorkPlanTasks<T extends WorkPlanTaskLike>(tasks: T[]
 export function countDashboardTaskStats(tasks: WorkPlanTaskLike[], date = toDateOnly()) {
   const visibleTasks = filterTodaysWorkPlanTasks(tasks, date);
 
-  const completedTasks = tasks.filter((task) => getTaskStatusForDashboard(task, date) === "done").length;
+  const completedTasks = visibleTasks.filter((task) => getTaskStatusForDashboard(task, date) === "done").length;
   const inProgressTasks = visibleTasks.filter((task) => getTaskStatusForDashboard(task, date) === "in_progress").length;
   const pendingTasks = visibleTasks.filter((task) => getTaskStatusForDashboard(task, date) === "pending").length;
 
   return {
     visibleTasks,
-    plannedTasks: tasks.length,
+    plannedTasks: visibleTasks.length,
     completedTasks,
     inProgressTasks,
     pendingTasks,

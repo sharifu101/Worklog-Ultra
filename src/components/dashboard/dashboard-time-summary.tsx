@@ -103,7 +103,7 @@ export function DashboardTimeSummary({
       <div className="mt-4 space-y-3">
         {items.map((item) => (
           <div className="flex items-center justify-between gap-4 border-b border-[var(--panel-border)] pb-2.5 last:border-b-0 last:pb-0" key={item.label}>
-            <span className="text-[13px] font-medium text-[var(--muted-foreground)]">{item.label}</span>
+            <span className="min-w-0 text-[13px] font-medium text-[var(--muted-foreground)]">{item.label}</span>
             <span className={`text-[13px] font-bold whitespace-nowrap ${item.label === "Remaining Time" ? "text-rose-500" : "text-[var(--foreground)]"}`}>
               {item.value}
             </span>
