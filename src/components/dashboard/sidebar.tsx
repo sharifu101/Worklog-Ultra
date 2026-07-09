@@ -6,10 +6,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BellRing, BriefcaseBusiness, CalendarCheck2, CheckSquare2, ClipboardList, FileClock, FolderTree, LayoutDashboard, LogOut, Menu, Shield, UserRoundSearch, Users, X } from "lucide-react";
 import { toast } from "sonner";
-import { roleUiTitle } from "@/lib/auth/roles";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { DashboardSidebarUser } from "@/lib/contracts/user";
 
 const navItems = [
@@ -26,15 +24,6 @@ const navItems = [
   { href: "/admin/departments", icon: FolderTree, label: "Departments" },
 ];
 
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
 function SidebarContent({
   user,
   pathname,
@@ -45,7 +34,6 @@ function SidebarContent({
   mobile?: boolean;
 }) {
   const router = useRouter();
-  const resolvedAvatarUrl = user.avatarUrl || "";
 
   async function logout() {
     const response = await fetch("/api/auth/logout", { method: "POST" });
@@ -128,16 +116,6 @@ function SidebarContent({
         })}
       </motion.nav>
       <div className={cn("mt-auto", mobile && "mb-6")}>
-        <div className="mb-4 flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-white/80">
-          <Avatar className="h-10 w-10 border border-white/15">
-            {resolvedAvatarUrl ? <AvatarImage alt={user.name} src={resolvedAvatarUrl} /> : null}
-            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-white">{user.name}</p>
-            <p className="truncate text-xs text-white/70">{user.designation ?? roleUiTitle(user.role)}</p>
-          </div>
-        </div>
         <button
           className="sidebar-force-white flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition hover:bg-white/10"
           onClick={logout}
@@ -159,7 +137,7 @@ export function Sidebar({ user }: { user: DashboardSidebarUser }) {
   return (
     <motion.aside
       animate={{ opacity: 1, x: 0 }}
-      className="sticky top-0 hidden h-screen w-[250px] shrink-0 bg-[linear-gradient(160deg,#000080_0%,#001f66_55%,#020b31_100%)] p-4 lg:flex lg:flex-col"
+      className="sticky top-0 hidden h-screen w-[224px] shrink-0 bg-[linear-gradient(160deg,#000080_0%,#001f66_55%,#020b31_100%)] p-3 xl:w-[250px] xl:p-4 lg:flex lg:flex-col"
       initial={{ opacity: 0, x: -26 }}
       transition={{ duration: 0.42, ease: "easeOut" }}
     >

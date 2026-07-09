@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { dispatchDashboardTasksRemoved } from "@/lib/dashboard-live-events";
 import { embedHistoryMeta, isMovedToHistory, stripHistoryMeta } from "@/lib/task-history-shared";
 import { embedRecurringTaskDescription, isRecurringTaskDescription, stripRecurringTaskMeta } from "@/lib/recurring-task-templates";
+import { toDateOnly } from "@/lib/utils";
 
 const AUTO_PREDICTION_TEXT = /^Predicted from your work pattern and completion history\.?\s*/i;
 
@@ -113,7 +114,7 @@ export function TaskManageControls({
     const response = await fetch(`/api/dashboard/tasks/${task.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "move_to_history" }),
+      body: JSON.stringify({ action: "move_to_history", reportDate: toDateOnly() }),
     });
     const raw = await response.text();
     const result = parseResponse(raw);

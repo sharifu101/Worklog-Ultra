@@ -76,7 +76,7 @@ export function DashboardProgressCard({
       whileHover={{ y: -3, boxShadow: "0 24px 52px rgba(87, 113, 150, 0.18)" }}
     >
       <h3 className="text-[1.05rem] font-bold text-[var(--foreground)]">Today&apos;s Progress</h3>
-      <div className="mt-4 flex items-center gap-4">
+      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
         <motion.div
           className="dashboard-progress-ring flex h-28 w-28 shrink-0 items-center justify-center rounded-full"
           key={`${plannedTasks}-${completedTasks}-${inProgressTasks}-${pendingTasks}`}

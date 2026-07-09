@@ -10,7 +10,7 @@ import { DashboardWorkPlanSection } from "@/components/dashboard/dashboard-work-
 import { DashboardWorkspaceModal } from "@/components/dashboard/dashboard-workspace-modal";
 import { requireUser } from "@/lib/auth/server";
 import { extractAssignmentReviewReason } from "@/lib/assignment-review";
-import { filterTodaysWorkPlanTasks } from "@/lib/dashboard-work-plan-filter";
+import { countDashboardTaskStats, filterTodaysWorkPlanTasks } from "@/lib/dashboard-work-plan-filter";
 import { canUserEditReportDate, getAssignableUsers, getCurrentUserAttendanceSnapshot, getDashboardData, getDepartments, getPlanSuggestions, getPlanWithReports } from "@/lib/worklog";
 import { formatDateTimeInDhaka, isTenderDepartmentName, toDateOnly } from "@/lib/utils";
 
@@ -183,16 +183,15 @@ export default async function DashboardPage() {
   );
 
   const today = new Date();
-  const completedTasks = data.tasks.filter((task) => task.updates[0]?.status === "done").length;
-  const inProgressTasks = data.tasks.filter((task) => task.updates[0]?.status === "in_progress").length;
-  const pendingTasks = Math.max(0, data.kpis.pendingItems - inProgressTasks);
-  const plannedTasks = data.kpis.tasksPlanned;
-  const workedMinutes = data.tasks.reduce((sum, task) => sum + (task.updates[0]?.trackedMinutes ?? 0), 0);
-  const targetMinutes = Math.max(plannedTasks * 60, 8 * 60);
-  const remainingMinutes = Math.max(targetMinutes - workedMinutes, 0);
   const activeTasks = filterTodaysWorkPlanTasks(data.tasks).sort(
     (left, right) => priorityRank(left.priority) - priorityRank(right.priority) || left.taskTitle.localeCompare(right.taskTitle),
   );
+  const dashboardStats = countDashboardTaskStats(data.tasks);
+  const completedTasks = dashboardStats.completedTasks;
+  const inProgressTasks = dashboardStats.inProgressTasks;
+  const pendingTasks = dashboardStats.pendingTasks;
+  const plannedTasks = dashboardStats.plannedTasks;
+  const workedMinutes = activeTasks.reduce((sum, task) => sum + (task.updates[0]?.trackedMinutes ?? 0), 0);
   const urgentTasks = activeTasks.filter((task) => ["high", "critical"].includes(task.priority)).slice(0, 3);
   const attendanceStatusLabel =
     attendance?.checkInAt && !attendance?.checkOutAt
@@ -262,7 +261,7 @@ export default async function DashboardPage() {
           </h1>
           <p className="mt-1.5 text-sm font-medium text-[var(--muted-foreground)]">{formatDashboardDate(today)}</p>
         </div>
-        <div className="flex w-full flex-wrap gap-3 md:w-auto md:justify-end xl:flex-nowrap">
+        <div className="flex w-full flex-wrap gap-3 md:w-auto md:justify-end">
           <DashboardWorkspaceModal
             canEditReport={editAccess.allowed}
             currentUserId={user.id}
@@ -308,7 +307,7 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5" data-page-section>
+      <section className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-5" data-page-section>
         {statCards.map((item, index) => {
           const style = statCardStyles[index % statCardStyles.length];
           const Icon = style.icon;
@@ -341,7 +340,7 @@ export default async function DashboardPage() {
               </div>
               <div className="relative mt-4">
                 <p className="text-[1.7rem] font-bold leading-none text-slate-900">{item.value}</p>
-                <p className="mt-1.5 max-w-[44%] text-sm font-semibold text-slate-700">{item.title}</p>
+                <p className="mt-1.5 max-w-[60%] text-sm font-semibold text-slate-700 sm:max-w-[52%]">{item.title}</p>
               </div>
               <div className="relative mt-5 flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
                 <div className="flex items-center gap-1.5">
@@ -358,7 +357,7 @@ export default async function DashboardPage() {
         })}
       </section>
 
-      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.82fr)_360px]" data-page-section>
+      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,320px)] 2xl:grid-cols-[minmax(0,1.82fr)_360px]" data-page-section>
         <div className="space-y-4">
           <DashboardRecurringQuickAdd
             allowOtherDepartment={user.role === "admin"}
@@ -405,7 +404,7 @@ export default async function DashboardPage() {
             }))}
           />
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-4 2xl:grid-cols-2">
             <div className="rounded-[26px] border border-[var(--panel-border)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]" data-dashboard-panel>
               <div className="flex items-center gap-2">
                 <CircleAlert className="h-5 w-5 text-rose-500" />
@@ -414,7 +413,7 @@ export default async function DashboardPage() {
               <div className="mt-5 space-y-4">
                 {urgentTasks.length ? (
                   urgentTasks.map((task) => (
-                    <div className="flex items-start justify-between gap-4" key={task.id}>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4" key={task.id}>
                       <div>
                         <p className="text-sm font-semibold text-[var(--foreground)]">{task.taskTitle}</p>
                         <p className="mt-1 text-sm text-[var(--muted-foreground)]">{task.user.department?.name ?? "General"}</p>
@@ -466,14 +465,14 @@ export default async function DashboardPage() {
           <div className="rounded-[24px] border border-[var(--panel-border)] bg-[var(--panel)] p-4 shadow-[var(--shadow)]" data-dashboard-panel>
             <h3 className="text-[1.05rem] font-bold text-[var(--foreground)]">Attendance</h3>
             <div className="mt-3 overflow-hidden rounded-[20px] border border-[var(--panel-border)]">
-              <div className="grid grid-cols-2 divide-x divide-[var(--panel-border)]">
+              <div className="grid divide-y divide-[var(--panel-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
                 <div className="px-4 py-3.5">
                   <p className="text-[13px] text-[var(--muted-foreground)]">Check In</p>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white">
                       <Check className="h-4 w-4" />
                     </span>
-                    <p className="text-[1.55rem] font-bold tracking-[-0.03em] text-[var(--foreground)]">{formatTimeOnly(attendance?.checkInAt)}</p>
+                    <p className="text-[1.2rem] font-bold tracking-[-0.03em] text-[var(--foreground)] sm:text-[1.55rem]">{formatTimeOnly(attendance?.checkInAt)}</p>
                   </div>
                 </div>
                 <div className="px-4 py-3.5">
@@ -482,7 +481,7 @@ export default async function DashboardPage() {
                     <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--panel-border)] bg-[var(--panel-alt)] text-[var(--muted-foreground)]">
                       <Clock3 className="h-4 w-4" />
                     </span>
-                    <p className="text-[1.55rem] font-bold tracking-[-0.03em] text-[var(--foreground)]">{formatTimeOnly(attendance?.checkOutAt)}</p>
+                    <p className="text-[1.2rem] font-bold tracking-[-0.03em] text-[var(--foreground)] sm:text-[1.55rem]">{formatTimeOnly(attendance?.checkOutAt)}</p>
                   </div>
                 </div>
               </div>

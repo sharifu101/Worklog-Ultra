@@ -41,7 +41,7 @@ type MonitorUser = {
   name: string;
   role: string;
   designation: string | null;
-  avatar_url: string | null;
+  avatarUrl: string | null;
   departmentId: string;
   departmentName: string;
   taskCount: number;
@@ -192,15 +192,15 @@ export function DirectoryCenter({
   return (
     <Card>
       <CardHeader className="gap-4">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <CardTitle>Work Monitor</CardTitle>
             <CardDescription>
               Review today&apos;s department plans, task progress, tracked time, attendance, and latest work notes with simple filters.
             </CardDescription>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="min-w-[220px]">
+          <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[420px]">
+            <div className="min-w-0">
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Department</p>
               <Select
                 onValueChange={(value) => {
@@ -222,7 +222,7 @@ export function DirectoryCenter({
                 </SelectContent>
               </Select>
             </div>
-            <div className="min-w-[220px]">
+            <div className="min-w-0">
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Employee</p>
               <Select onValueChange={setSelectedUserId} value={selectedUserId}>
                 <SelectTrigger>
@@ -240,7 +240,7 @@ export function DirectoryCenter({
             </div>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <div className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Visible employees</p>
             <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">{filteredUsers.length}</p>
@@ -262,11 +262,11 @@ export function DirectoryCenter({
           <div className="overflow-hidden rounded-[28px] border border-[var(--panel-border)] bg-[var(--panel-muted)]">
             {(filteredUsers ?? []).map((user) => (
               <section key={user.id} className="border-b border-[var(--panel-border)] px-4 py-4 last:border-b-0">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-start 2xl:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start gap-4">
                       <Avatar className="h-12 w-12">
-                        {user.avatar_url ? <AvatarImage alt={user.name} src={user.avatar_url} /> : null}
+                        {user.avatarUrl ? <AvatarImage alt={user.name} src={user.avatarUrl} /> : null}
                         <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
@@ -300,7 +300,7 @@ export function DirectoryCenter({
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 text-xs text-[var(--muted-foreground)] xl:max-w-[34%] xl:justify-end">
+                  <div className="flex flex-wrap gap-2 text-xs text-[var(--muted-foreground)] 2xl:max-w-[34%] 2xl:justify-end">
                     <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel)] px-2.5 py-1">
                       Break {formatMinutes(user.attendance?.breakMinutes ?? 0)}
                     </span>
@@ -364,7 +364,7 @@ export function DirectoryCenter({
                                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-700">
                                     Daily Work Log
                                   </p>
-                                  <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                  <div className="mt-2 grid gap-2 md:grid-cols-2 2xl:grid-cols-3">
                                     {continuationSummary.dailyLogs.map((entry) => (
                                       <div
                                         className="rounded-2xl border border-violet-200 bg-white px-3 py-2 text-xs text-slate-700"

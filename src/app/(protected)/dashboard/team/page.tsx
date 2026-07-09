@@ -91,7 +91,7 @@ export default async function TeamPage() {
 
         <div className="overflow-hidden rounded-[28px] border border-[var(--panel-border)] bg-[var(--panel-muted)]">
           {(sortedSummaries ?? []).map((employee) => {
-            const employeeAvatarUrl = employee.avatarUrl ?? employee.avatar_url ?? "";
+            const employeeAvatarUrl = employee.avatarUrl ?? "";
 
             return (
               <div

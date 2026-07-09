@@ -531,13 +531,12 @@ export async function getRequestNotifications(user: {
 
 export async function getDashboardData(userId: string, role: UserRole, departmentId?: string | null) {
   const today = new Date();
-  const dayStart = startOfDay(today);
   const dayEnd = endOfDay(today);
 
   const taskWhere = {
     userId,
     assignedBy: null,
-    planDate: { gte: dayStart, lte: dayEnd },
+    planDate: { lte: dayEnd },
   };
 
   const activeStaffWhere =
@@ -663,7 +662,7 @@ export async function getDashboardData(userId: string, role: UserRole, departmen
             role: member.role,
             departmentId: member.departmentId ?? "no-department",
             departmentName: member.department?.name ?? "No department",
-            avatar_url: member.avatarUrl ?? null,
+            avatarUrl: member.avatarUrl ?? null,
             score,
             completionRate,
             trackedMinutes,
@@ -1032,7 +1031,6 @@ export async function getTeamData(role: UserRole, departmentId?: string | null, 
       departmentId: user.departmentId,
       isActive: user.isActive,
       avatarUrl: user.avatarUrl ?? null,
-      avatar_url: user.avatarUrl ?? null,
       departmentName: user.department?.name ?? "No department",
       tasksPlanned: memberTasks.length,
       completedTasks,
@@ -1138,7 +1136,7 @@ export async function getAdminOverview(viewer?: {
         userId: report.dailyTask.userId,
         name: report.dailyTask.user.name,
         role: report.dailyTask.user.role,
-        avatar_url: report.dailyTask.user.avatarUrl,
+        avatarUrl: report.dailyTask.user.avatarUrl,
         departmentName: report.dailyTask.department.name,
         totalReports: 0,
         totalTrackedMinutes: 0,
@@ -1170,7 +1168,7 @@ export async function getAdminOverview(viewer?: {
       userId: string;
       name: string;
       role: UserRole;
-      avatar_url: string | null;
+      avatarUrl: string | null;
       departmentName: string;
       totalReports: number;
       totalTrackedMinutes: number;
@@ -1356,7 +1354,7 @@ export async function getWorkspaceDirectoryData(viewer: {
 }) {
   const today = toDateOnly();
   const departmentScope =
-    (viewer.role === UserRole.manager || viewer.scopeToDepartment) && viewer.departmentId
+    viewer.scopeToDepartment && viewer.departmentId
       ? {
           departmentId: viewer.departmentId,
         }
@@ -1426,7 +1424,7 @@ export async function getWorkspaceDirectoryData(viewer: {
         name: user.name,
         role: user.role,
         designation: user.designation,
-        avatar_url: user.avatarUrl,
+        avatarUrl: user.avatarUrl,
         departmentId: user.departmentId ?? "no-department",
         departmentName: user.department?.name ?? "No department",
         taskCount: todaysPlans.length,
@@ -1516,7 +1514,7 @@ export async function getAttendanceData(user: {
       name: member.name,
       email: member.email,
       role: member.role,
-      avatar_url: member.avatarUrl,
+      avatarUrl: member.avatarUrl,
       departmentName: member.department?.name ?? "No department",
       attendance: record
         ? {

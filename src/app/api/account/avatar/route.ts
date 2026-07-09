@@ -82,11 +82,9 @@ export async function POST(request: NextRequest) {
   return apiSuccess({
     message: "Profile photo uploaded successfully.",
     avatarUrl,
-    avatar_url: avatarUrl,
     user: {
       ...updatedUser,
       avatarUrl,
-      avatar_url: avatarUrl,
     },
   });
 }
