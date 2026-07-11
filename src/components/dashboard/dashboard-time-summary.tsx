@@ -98,13 +98,13 @@ export function DashboardTimeSummary({
   ];
 
   return (
-    <div className="rounded-[24px] border border-[var(--panel-border)] bg-[var(--panel)] p-4 shadow-[var(--shadow)]">
-      <h3 className="text-[1.05rem] font-bold text-[var(--foreground)]">Time Summary</h3>
-      <div className="mt-4 space-y-3">
+    <div className="rounded-[22px] border border-[var(--panel-border)] bg-[var(--panel)] p-3.5 sm:p-4 shadow-[var(--shadow)]">
+      <h3 className="text-[1rem] font-bold text-[var(--foreground)] sm:text-[1.05rem]">Time Summary</h3>
+      <div className="mt-3 space-y-2.5 sm:mt-4 sm:space-y-3">
         {items.map((item) => (
-          <div className="flex items-center justify-between gap-4 border-b border-[var(--panel-border)] pb-2.5 last:border-b-0 last:pb-0" key={item.label}>
-            <span className="min-w-0 text-[13px] font-medium text-[var(--muted-foreground)]">{item.label}</span>
-            <span className={`text-[13px] font-bold whitespace-nowrap ${item.label === "Remaining Time" ? "text-rose-500" : "text-[var(--foreground)]"}`}>
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--panel-border)] pb-2.5 last:border-b-0 last:pb-0" key={item.label}>
+            <span className="min-w-0 text-[12px] font-medium text-[var(--muted-foreground)] sm:text-[13px]">{item.label}</span>
+            <span className={`text-[12px] font-bold whitespace-nowrap sm:text-[13px] ${item.label === "Remaining Time" ? "text-rose-500" : "text-[var(--foreground)]"}`}>
               {item.value}
             </span>
           </div>

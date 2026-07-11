@@ -222,12 +222,12 @@ export function DashboardRecurringQuickAdd({
   }
 
   return (
-    <div className="rounded-[24px] bg-[var(--panel)] p-4 shadow-[var(--shadow)]">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-[1.05rem] font-bold leading-tight text-[var(--foreground)]">Today&apos;s Recurring Suggestions</h3>
-        <div className="flex items-center gap-3">
+    <div className="rounded-[22px] bg-[var(--panel)] p-3.5 sm:p-4 shadow-[var(--shadow)]">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h3 className="text-[1rem] font-bold leading-tight text-[var(--foreground)] sm:text-[1.05rem]">Today&apos;s Recurring Suggestions</h3>
+        <div className="flex flex-wrap items-center gap-3">
           <button
-            className="shrink-0 text-sm font-semibold text-rose-500 transition hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+            className="shrink-0 text-xs font-semibold text-rose-500 transition hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm"
             disabled={!templates.length || clearing}
             onClick={handleClearTemplates}
             type="button"
@@ -236,7 +236,7 @@ export function DashboardRecurringQuickAdd({
           </button>
           <Dialog.Root onOpenChange={setManageOpen} open={manageOpen}>
             <Dialog.Trigger asChild>
-              <button className="shrink-0 text-sm font-semibold text-[#4f5ef7] hover:text-[#3f4ede]" type="button">
+              <button className="shrink-0 text-xs font-semibold text-[#4f5ef7] hover:text-[#3f4ede] sm:text-sm" type="button">
                 Manage
               </button>
             </Dialog.Trigger>
@@ -274,7 +274,7 @@ export function DashboardRecurringQuickAdd({
           </Dialog.Root>
         </div>
       </div>
-      <div className="mt-3 space-y-2">
+      <div className="mt-2.5 space-y-2">
         {templates.length ? (
           visibleTemplates.map((template, index) => {
             const alreadyAdded = existingTaskTitleSet.has(template.taskTitle.trim().toLowerCase());
@@ -282,20 +282,20 @@ export function DashboardRecurringQuickAdd({
             return (
               <div
                 key={template.id}
-                className="flex items-center justify-between gap-3 border-b border-[var(--panel-border)] py-2.5 last:border-b-0 last:pb-0 first:pt-0"
+                className="flex flex-col gap-3 border-b border-[var(--panel-border)] py-2.5 last:border-b-0 last:pb-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-[var(--foreground)]">
+                  <p className="truncate text-[0.92rem] font-semibold text-[var(--foreground)] sm:text-sm">
                     {page * pageSize + index + 1}. {template.taskTitle}
                   </p>
-                  <div className="mt-1 flex items-center gap-2">
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-700 dark:bg-amber-400/10 dark:text-amber-200">
                       {template.priority}
                     </span>
                     <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-400/10 dark:text-blue-200">
                       {template.departmentId === OTHER_DEPARTMENT_ID ? "Other" : "Department"}
                     </span>
-                    <span className="text-[11px] font-medium text-[var(--muted-foreground)]">
+                    <span className="text-[10px] font-medium text-[var(--muted-foreground)] sm:text-[11px]">
                       {describeRecurringTemplate(template)}
                     </span>
                     <span
@@ -310,7 +310,7 @@ export function DashboardRecurringQuickAdd({
                   </div>
                 </div>
                 <Button
-                  className="button-force-white h-8 shrink-0 rounded-xl bg-[#4f5ef7] px-4 text-sm hover:bg-[#4453eb]"
+                  className="button-force-white h-8 shrink-0 rounded-xl bg-[#4f5ef7] px-3.5 text-xs hover:bg-[#4453eb] sm:px-4 sm:text-sm"
                   disabled={alreadyAdded || addingTemplateId === template.id}
                   onClick={() => addToPlan(template)}
                   type="button"
@@ -321,7 +321,7 @@ export function DashboardRecurringQuickAdd({
             );
           })
         ) : (
-          <div className="rounded-2xl border border-dashed border-[var(--panel-border)] bg-[var(--panel-muted)] px-4 py-4 text-sm text-[var(--muted-foreground)]">
+          <div className="rounded-2xl border border-dashed border-[var(--panel-border)] bg-[var(--panel-muted)] px-3.5 py-3.5 text-[0.92rem] text-[var(--muted-foreground)] sm:px-4 sm:py-4 sm:text-sm">
             No recurring task has been saved yet. Use <span className="font-semibold text-[var(--foreground)]">Manage</span> to save your regular work once.
           </div>
         )}

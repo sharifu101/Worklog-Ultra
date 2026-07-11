@@ -418,9 +418,9 @@ export function DashboardWorkdayTimer({
 
   if (mode === "button") {
     return (
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <button
-          className={`button-force-white inline-flex h-11 items-center gap-2 rounded-2xl px-4 text-sm font-semibold transition ${
+          className={`button-force-white inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl px-3.5 text-sm font-semibold transition sm:h-11 sm:px-4 ${
             isRunning ? "bg-rose-500 hover:bg-rose-600" : "bg-emerald-500 hover:bg-emerald-600"
           } ${saving ? "cursor-not-allowed opacity-70" : ""}`}
           disabled={saving}

@@ -451,14 +451,14 @@ export function DashboardTaskTimerAction({
   }, [actualStart, liveTrackedSeconds, now, reportDate, runningStartedAt, saving, trackedSecondsBase]);
 
   const buttonClass = compact
-    ? "button-force-white !text-white [&_svg]:!text-white h-8 min-w-[72px] justify-center rounded-full px-2.5 text-[11px] font-semibold tracking-[0.01em] transition-all duration-200 hover:scale-[1.02] active:scale-95 disabled:scale-100 sm:min-w-[84px] sm:px-3 sm:text-xs"
+    ? "button-force-white !text-white [&_svg]:!text-white h-8 min-w-[62px] shrink-0 justify-center rounded-full px-2 text-[10px] font-semibold tracking-[0.01em] transition-all duration-200 hover:scale-[1.02] active:scale-95 disabled:scale-100 min-[420px]:min-w-[72px] min-[420px]:px-2.5 min-[420px]:text-[11px] min-[560px]:min-w-[84px] min-[560px]:px-3 min-[560px]:text-xs"
     : "button-force-white !text-white [&_svg]:!text-white h-9 min-w-[92px] justify-center rounded-full px-3.5 text-sm font-semibold tracking-[0.01em] transition-all duration-200 hover:scale-[1.02] active:scale-95 disabled:scale-100";
   const startButtonClass = `${buttonClass} border border-white/20 bg-gradient-to-r from-[#06b6d4] via-[#14b8a6] to-[#22c55e] shadow-[0_12px_30px_rgba(6,182,212,0.34)] hover:from-[#0ea5e9] hover:via-[#06b6d4] hover:to-[#10b981] hover:shadow-[0_16px_34px_rgba(8,145,178,0.42)]`;
   const doneButtonClass = `${buttonClass} border border-white/20 bg-gradient-to-r from-[#7c3aed] via-[#8b5cf6] to-[#ec4899] shadow-[0_12px_30px_rgba(168,85,247,0.3)] hover:from-[#6d28d9] hover:via-[#7c3aed] hover:to-[#db2777] hover:shadow-[0_16px_34px_rgba(168,85,247,0.42)] disabled:from-[#94a3b8] disabled:to-[#94a3b8] disabled:shadow-none`;
 
   return (
-    <div className={compact ? "flex min-w-0 max-w-full flex-col gap-1.5" : "flex min-w-[170px] flex-col gap-2"}>
-      <div className="flex flex-wrap items-center gap-1.5">
+    <div className={compact ? "flex w-full min-w-0 max-w-full flex-col gap-1.5" : "flex min-w-[170px] flex-col gap-2"}>
+      <div className={compact ? "flex min-w-0 items-center gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" : "flex flex-wrap items-center gap-1.5"}>
         <Button
           className={startButtonClass}
           disabled={!canStart}
@@ -481,16 +481,16 @@ export function DashboardTaskTimerAction({
           </Button>
         )}
         {afterDoneSlot ? afterDoneSlot : null}
-        <span
-          className={`inline-flex items-center justify-center gap-1 rounded-full border border-slate-200 bg-white/80 font-semibold tabular-nums text-slate-600 ${
-            compact ? "w-full px-2 py-1 text-[10px] sm:w-auto sm:min-w-[118px]" : "px-3 py-1.5 text-xs"
-          }`}
-        >
-          <Timer className={`text-[#4f5ef7] ${compact ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
-          {formatDuration(liveTrackedSeconds)}
-        </span>
       </div>
-      <div className={compact ? "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5" : "grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"}>
+      <span
+        className={`inline-flex items-center justify-center gap-1 rounded-full border border-slate-200 bg-white/80 font-semibold tabular-nums text-slate-600 ${
+          compact ? "w-full px-2 py-1 text-[10px]" : "px-3 py-1.5 text-xs"
+        }`}
+      >
+        <Timer className={`text-[#4f5ef7] ${compact ? "h-3 w-3" : "h-3.5 w-3.5"}`} />
+        {formatDuration(liveTrackedSeconds)}
+      </span>
+      <div className={compact ? "grid gap-1.5 min-[480px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[480px]:items-center" : "grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]"}>
         <Input
           className={compact ? "h-7 min-w-0 px-2 text-[11px]" : undefined}
           disabled={!canEdit || saving || Boolean(runningStartedAt)}
@@ -498,7 +498,7 @@ export function DashboardTaskTimerAction({
           type="time"
           value={startClockValue}
         />
-        {!compact ? <span className="hidden sm:inline" /> : <span className="text-[10px] text-slate-300">–</span>}
+        {!compact ? <span className="hidden sm:inline" /> : <span className="hidden text-[10px] text-slate-300 min-[480px]:inline">-</span>}
         <Input
           className={compact ? "h-7 min-w-0 px-2 text-[11px]" : undefined}
           disabled={!canEdit || saving || Boolean(runningStartedAt) || !actualStart}

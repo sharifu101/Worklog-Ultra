@@ -472,7 +472,7 @@ export function DashboardHeader({
       <div className="flex-1" />
       <motion.div
         animate={{ opacity: 1, x: 0 }}
-        className="ml-auto flex max-w-full items-center gap-2 sm:gap-3 lg:gap-4"
+        className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2 sm:gap-3 lg:gap-4"
         initial={{ opacity: 0, x: 20 }}
         transition={{ delay: 0.08, duration: 0.36, ease: "easeOut" }}
       >
@@ -535,7 +535,7 @@ export function DashboardHeader({
             ) : null}
           </button>
           {bellOpen ? (
-            <div className="dashboard-header-popover absolute right-0 top-[calc(100%+12px)] z-30 w-[min(360px,calc(100vw-1.5rem))] rounded-3xl border border-[var(--panel-border)] bg-[var(--panel)] p-3 shadow-[0_18px_40px_rgba(15,23,42,0.14)] sm:w-[360px]">
+            <div className="dashboard-header-popover fixed left-3 right-3 top-20 z-30 max-h-[min(70vh,32rem)] overflow-y-auto rounded-3xl border border-[var(--panel-border)] bg-[var(--panel)] p-3 shadow-[0_18px_40px_rgba(15,23,42,0.14)] sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+12px)] sm:max-h-none sm:w-[360px] sm:overflow-visible">
               {notificationDetail ? (
                 <div className="space-y-3">
                   <button

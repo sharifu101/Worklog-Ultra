@@ -243,7 +243,7 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <DashboardTaskNotifier
         tasks={(data.tasks ?? []).map((task) => ({
           id: task.id,
@@ -254,14 +254,14 @@ export default async function DashboardPage() {
           taskDescription: task.taskDescription,
         }))}
       />
-      <section className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between" data-page-section>
+      <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between" data-page-section>
         <div>
-          <h1 className="max-w-4xl text-lg font-semibold leading-tight text-[var(--foreground)] md:text-xl">
+          <h1 className="max-w-3xl text-[1.05rem] font-semibold leading-tight text-[var(--foreground)] sm:text-[1.18rem] lg:text-xl">
             {motivation.message}
           </h1>
-          <p className="mt-1.5 text-sm font-medium text-[var(--muted-foreground)]">{formatDashboardDate(today)}</p>
+          <p className="mt-1 text-xs font-medium text-[var(--muted-foreground)] sm:text-sm">{formatDashboardDate(today)}</p>
         </div>
-        <div className="flex w-full flex-wrap gap-3 md:w-auto md:justify-end">
+        <div className="flex w-full flex-nowrap items-center gap-2 sm:gap-3 lg:w-auto lg:justify-end">
           <DashboardWorkspaceModal
             canEditReport={editAccess.allowed}
             currentUserId={user.id}
@@ -307,49 +307,57 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-5" data-page-section>
+      <section className="grid grid-cols-5 gap-1.5 sm:gap-2 xl:gap-2.5" data-page-section>
         {statCards.map((item, index) => {
           const style = statCardStyles[index % statCardStyles.length];
           const Icon = style.icon;
+          const compactTitle = item.title
+            .replace(" Tasks", "")
+            .replace("Actual Work Time", "Work Time");
+          const compactLinkLabel = item.linkLabel === "View details" ? "Details" : "View";
 
           return (
             <Link
-              className={`group relative overflow-hidden rounded-[22px] border p-4 transition hover:-translate-y-0.5 ${style.card} ${style.border} ${style.shadow}`}
+              className={`group relative min-h-[96px] min-w-0 overflow-hidden rounded-[14px] border p-1.5 transition hover:-translate-y-0.5 sm:min-h-[116px] sm:rounded-[16px] sm:p-2 lg:min-h-[132px] lg:p-2.5 ${style.card} ${style.border} ${style.shadow}`}
               data-dashboard-card
               href={item.href}
               key={item.title}
             >
-              <div className={`absolute inset-x-0 top-0 h-1.5 ${style.accent}`} />
-              <div className="pointer-events-none absolute inset-y-1 right-0 w-[54%]">
+              <div className={`absolute inset-x-0 top-0 h-1 ${style.accent}`} />
+              <div className="pointer-events-none absolute inset-y-1 right-0 w-[28%] sm:w-[30%]">
                 <Image
                   alt={item.title}
                   className="object-contain object-right-center"
                   data-dashboard-float="soft"
                   fill
-                  sizes="(max-width: 1280px) 190px, 250px"
+                  sizes="(max-width: 640px) 64px, (max-width: 1280px) 120px, 180px"
                   src={style.art}
                 />
               </div>
-              <div className="relative flex items-center justify-between gap-3">
-                <div className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] shadow-sm ${style.iconWrap}`}>
-                  <Icon className="relative h-6 w-6" />
+              <div className="relative flex items-start justify-between gap-1 pr-[4%] sm:pr-[8%]">
+                <div className={`relative flex h-6 w-6 shrink-0 items-center justify-center rounded-[10px] shadow-sm sm:h-7 sm:w-7 lg:h-8 lg:w-8 ${style.iconWrap}`}>
+                  <Icon className="relative h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">
+                <span className="hidden rounded-full bg-slate-100 px-1.5 py-0.5 text-right text-[7px] font-semibold uppercase tracking-[0.08em] text-slate-600 min-[1100px]:inline-block">
                   {style.label}
                 </span>
               </div>
-              <div className="relative mt-4">
-                <p className="text-[1.7rem] font-bold leading-none text-slate-900">{item.value}</p>
-                <p className="mt-1.5 max-w-[60%] text-sm font-semibold text-slate-700 sm:max-w-[52%]">{item.title}</p>
+              <div className="relative mt-1.5 pr-[10%] sm:mt-2 sm:pr-[16%]">
+                <p className="truncate text-[0.8rem] font-bold leading-none text-slate-900 sm:text-[0.98rem] lg:text-[1.08rem]">{item.value}</p>
+                <p className="mt-1 line-clamp-2 text-[0.58rem] font-semibold leading-tight text-slate-700 sm:text-[0.68rem] lg:text-[0.8rem]">
+                  <span className="sm:hidden">{compactTitle}</span>
+                  <span className="hidden sm:inline">{item.title}</span>
+                </p>
               </div>
-              <div className="relative mt-5 flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
-                <div className="flex items-center gap-1.5">
-                  <span className={`h-2.5 w-2.5 rounded-full ${style.accent}`} />
-                  <span className="h-2.5 w-8 rounded-full bg-slate-300" />
-                  <span className="h-2.5 w-14 rounded-full bg-slate-200" />
+              <div className="relative mt-1.5 flex items-center justify-between gap-1 border-t border-slate-200 pt-1.5 sm:mt-2.5 sm:pt-2">
+                <div className="flex items-center gap-0.5 sm:gap-1">
+                  <span className={`h-1.5 w-1.5 rounded-full sm:h-2 sm:w-2 ${style.accent}`} />
+                  <span className="h-1.5 w-3 rounded-full bg-slate-300 sm:h-2 sm:w-5 lg:w-6" />
+                  <span className="h-1.5 w-4 rounded-full bg-slate-200 sm:h-2 sm:w-7 lg:w-10" />
                 </div>
-                <div className="text-sm font-semibold text-slate-600 transition group-hover:text-slate-900">
-                  {item.linkLabel}
+                <div className="truncate text-[0.52rem] font-semibold text-slate-600 transition group-hover:text-slate-900 sm:text-[0.62rem] lg:text-[0.72rem]">
+                  <span className="sm:hidden">{compactLinkLabel}</span>
+                  <span className="hidden sm:inline">{item.linkLabel}</span>
                 </div>
               </div>
             </Link>
@@ -357,8 +365,8 @@ export default async function DashboardPage() {
         })}
       </section>
 
-      <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,320px)] 2xl:grid-cols-[minmax(0,1.82fr)_360px]" data-page-section>
-        <div className="space-y-4">
+      <section className="grid items-start gap-3 min-[900px]:grid-cols-[minmax(0,1fr)_248px] xl:grid-cols-[minmax(0,1fr)_290px] min-[1680px]:grid-cols-[minmax(0,1.52fr)_340px]" data-page-section>
+        <div className="space-y-3 sm:space-y-4">
           <DashboardRecurringQuickAdd
             allowOtherDepartment={user.role === "admin"}
             currentUserDepartmentId={user.departmentId || departments[0]?.id || ""}
@@ -404,21 +412,21 @@ export default async function DashboardPage() {
             }))}
           />
 
-          <div className="grid gap-4 2xl:grid-cols-2">
-            <div className="rounded-[26px] border border-[var(--panel-border)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]" data-dashboard-panel>
+          <div className="grid gap-3 2xl:grid-cols-2">
+            <div className="rounded-[22px] border border-[var(--panel-border)] bg-[var(--panel)] p-4 sm:p-5 shadow-[var(--shadow)]" data-dashboard-panel>
               <div className="flex items-center gap-2">
-                <CircleAlert className="h-5 w-5 text-rose-500" />
-                <h3 className="text-xl font-bold text-[var(--foreground)]">High Priority Tasks</h3>
+                <CircleAlert className="h-4 w-4 text-rose-500 sm:h-5 sm:w-5" />
+                <h3 className="text-lg font-bold text-[var(--foreground)] sm:text-xl">High Priority Tasks</h3>
               </div>
-              <div className="mt-5 space-y-4">
+              <div className="mt-4 space-y-3 sm:mt-5 sm:space-y-4">
                 {urgentTasks.length ? (
                   urgentTasks.map((task) => (
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4" key={task.id}>
                       <div>
-                        <p className="text-sm font-semibold text-[var(--foreground)]">{task.taskTitle}</p>
-                        <p className="mt-1 text-sm text-[var(--muted-foreground)]">{task.user.department?.name ?? "General"}</p>
+                        <p className="text-sm font-semibold leading-snug text-[var(--foreground)]">{task.taskTitle}</p>
+                        <p className="mt-1 text-xs sm:text-sm text-[var(--muted-foreground)]">{task.user.department?.name ?? "General"}</p>
                       </div>
-                      <span className="text-sm font-medium text-rose-500">High</span>
+                      <span className="text-xs font-medium text-rose-500 sm:text-sm">High</span>
                     </div>
                   ))
                 ) : (
@@ -427,17 +435,17 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div className="rounded-[26px] border border-[var(--panel-border)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]" data-dashboard-panel>
+            <div className="rounded-[22px] border border-[var(--panel-border)] bg-[var(--panel)] p-4 sm:p-5 shadow-[var(--shadow)]" data-dashboard-panel>
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-xl font-bold text-[var(--foreground)]">Recent Notices</h3>
-                <Link className="text-sm font-semibold text-[#4f5ef7] hover:text-[#3f4ede]" href="/dashboard/help">
+                <h3 className="text-lg font-bold text-[var(--foreground)] sm:text-xl">Recent Notices</h3>
+                <Link className="text-xs font-semibold text-[#4f5ef7] hover:text-[#3f4ede] sm:text-sm" href="/dashboard/help">
                   View all
                 </Link>
               </div>
-              <div className="mt-5 space-y-4">
+              <div className="mt-4 space-y-3 sm:mt-5 sm:space-y-4">
                 {notices.map((notice, index) => (
-                  <div className="flex items-start justify-between gap-4 border-b border-[var(--panel-border)] pb-3 last:border-b-0 last:pb-0" key={notice}>
-                    <p className="text-sm font-medium text-[var(--foreground)]">{notice}</p>
+                  <div className="flex items-start justify-between gap-3 border-b border-[var(--panel-border)] pb-3 last:border-b-0 last:pb-0" key={notice}>
+                    <p className="text-sm font-medium leading-snug text-[var(--foreground)]">{notice}</p>
                     <span className="shrink-0 text-xs font-medium text-[var(--muted-foreground)]">0{index + 1}</span>
                   </div>
                 ))}
@@ -446,7 +454,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <DashboardProgressCard
             completedTasks={completedTasks}
             inProgressTasks={inProgressTasks}
@@ -462,30 +470,30 @@ export default async function DashboardPage() {
             }))}
           />
 
-          <div className="rounded-[24px] border border-[var(--panel-border)] bg-[var(--panel)] p-4 shadow-[var(--shadow)]" data-dashboard-panel>
+          <div className="rounded-[22px] border border-[var(--panel-border)] bg-[var(--panel)] p-3.5 sm:p-4 shadow-[var(--shadow)]" data-dashboard-panel>
             <h3 className="text-[1.05rem] font-bold text-[var(--foreground)]">Attendance</h3>
-            <div className="mt-3 overflow-hidden rounded-[20px] border border-[var(--panel-border)]">
+            <div className="mt-3 overflow-hidden rounded-[18px] border border-[var(--panel-border)]">
               <div className="grid divide-y divide-[var(--panel-border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-                <div className="px-4 py-3.5">
+                <div className="px-3.5 py-3 sm:px-4 sm:py-3.5">
                   <p className="text-[13px] text-[var(--muted-foreground)]">Check In</p>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white">
                       <Check className="h-4 w-4" />
                     </span>
-                    <p className="text-[1.2rem] font-bold tracking-[-0.03em] text-[var(--foreground)] sm:text-[1.55rem]">{formatTimeOnly(attendance?.checkInAt)}</p>
+                    <p className="text-[1rem] font-bold tracking-[-0.03em] text-[var(--foreground)] sm:text-[1.3rem] xl:text-[1.55rem]">{formatTimeOnly(attendance?.checkInAt)}</p>
                   </div>
                 </div>
-                <div className="px-4 py-3.5">
+                <div className="px-3.5 py-3 sm:px-4 sm:py-3.5">
                   <p className="text-[13px] text-[var(--muted-foreground)]">Check Out</p>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--panel-border)] bg-[var(--panel-alt)] text-[var(--muted-foreground)]">
                       <Clock3 className="h-4 w-4" />
                     </span>
-                    <p className="text-[1.2rem] font-bold tracking-[-0.03em] text-[var(--foreground)] sm:text-[1.55rem]">{formatTimeOnly(attendance?.checkOutAt)}</p>
+                    <p className="text-[1rem] font-bold tracking-[-0.03em] text-[var(--foreground)] sm:text-[1.3rem] xl:text-[1.55rem]">{formatTimeOnly(attendance?.checkOutAt)}</p>
                   </div>
                 </div>
               </div>
-              <div className="bg-emerald-50 px-4 py-2.5 text-center text-sm font-semibold text-emerald-700">{attendanceStatusLabel}</div>
+              <div className="bg-emerald-50 px-3.5 py-2 text-center text-xs font-semibold text-emerald-700 sm:px-4 sm:py-2.5 sm:text-sm">{attendanceStatusLabel}</div>
             </div>
           </div>
         </div>

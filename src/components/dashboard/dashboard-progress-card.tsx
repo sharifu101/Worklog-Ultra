@@ -68,25 +68,25 @@ export function DashboardProgressCard({
 
   return (
     <motion.div
-      className="rounded-[24px] border border-[var(--panel-border)] bg-[var(--panel)] p-4 shadow-[var(--shadow)]"
+      className="rounded-[22px] border border-[var(--panel-border)] bg-[var(--panel)] p-3.5 sm:p-4 shadow-[var(--shadow)]"
       data-dashboard-panel
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.38, ease: "easeOut" }}
       whileHover={{ y: -3, boxShadow: "0 24px 52px rgba(87, 113, 150, 0.18)" }}
     >
-      <h3 className="text-[1.05rem] font-bold text-[var(--foreground)]">Today&apos;s Progress</h3>
-      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
+      <h3 className="text-[1rem] font-bold text-[var(--foreground)] sm:text-[1.05rem]">Today&apos;s Progress</h3>
+      <div className="mt-3 flex flex-col gap-3 sm:mt-4 sm:gap-4">
         <motion.div
-          className="dashboard-progress-ring flex h-28 w-28 shrink-0 items-center justify-center rounded-full"
+          className="dashboard-progress-ring mx-auto flex h-24 w-24 shrink-0 items-center justify-center rounded-full sm:h-28 sm:w-28 2xl:mx-0"
           key={`${plannedTasks}-${completedTasks}-${inProgressTasks}-${pendingTasks}`}
           layout
           transition={{ duration: 0.42, ease: "easeOut" }}
           style={{ background: ringBackground }}
         >
-          <div className="flex h-[76px] w-[76px] flex-col items-center justify-center rounded-full bg-[var(--panel)]">
+          <div className="flex h-[66px] w-[66px] flex-col items-center justify-center rounded-full bg-[var(--panel)] sm:h-[76px] sm:w-[76px]">
             <motion.p
-              className="text-[1.8rem] font-bold leading-none text-[var(--foreground)]"
+              className="text-[1.45rem] font-bold leading-none text-[var(--foreground)] sm:text-[1.8rem]"
               key={plannedTasks}
               initial={{ opacity: 0.45, scale: 0.88 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -94,24 +94,24 @@ export function DashboardProgressCard({
             >
               {plannedTasks}
             </motion.p>
-            <p className="mt-1 text-xs text-[var(--muted-foreground)]">Total Tasks</p>
+            <p className="mt-1 text-[11px] text-[var(--muted-foreground)] sm:text-xs">Total Tasks</p>
           </div>
         </motion.div>
-        <div className="min-w-0 flex-1 space-y-2.5">
+        <div className="min-w-0 flex-1 space-y-2">
           {items.map((item) => (
             <motion.div
-              className="flex items-center justify-between gap-3 text-sm"
+              className="grid grid-cols-1 gap-1 rounded-xl border border-[var(--panel-border)] bg-[var(--panel-muted)] px-3 py-2 text-[0.84rem] sm:text-sm"
               key={`${item.label}-${item.value}`}
               layout
               initial={{ opacity: 0, x: 16 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.24 }}
             >
-              <div className="flex min-w-0 items-center gap-3">
-                <span className={`h-3 w-3 shrink-0 rounded-full ${item.color}`} />
-                <span className="whitespace-nowrap font-medium text-[var(--muted-foreground)]">{item.label}</span>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full sm:h-3 sm:w-3 ${item.color}`} />
+                <span className="min-w-0 font-medium leading-snug text-[var(--muted-foreground)]">{item.label}</span>
               </div>
-              <span className="shrink-0 whitespace-nowrap font-semibold text-[var(--foreground)]">
+              <span className="pl-4 text-left font-semibold leading-snug text-[var(--foreground)]">
                 {item.value} ({plannedTasks ? Math.round((item.value / plannedTasks) * 100) : 0}%)
               </span>
             </motion.div>

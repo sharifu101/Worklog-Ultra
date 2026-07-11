@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BellRing, BriefcaseBusiness, CalendarCheck2, CheckSquare2, ClipboardList, FileClock, FolderTree, LayoutDashboard, LogOut, Menu, Shield, UserRoundSearch, Users, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -28,14 +29,17 @@ function SidebarContent({
   user,
   pathname,
   mobile = false,
+  onNavigate,
 }: {
   user: DashboardSidebarUser;
   pathname: string;
   mobile?: boolean;
+  onNavigate?: () => void;
 }) {
   const router = useRouter();
 
   async function logout() {
+    onNavigate?.();
     const response = await fetch("/api/auth/logout", { method: "POST" });
     const result = await response.json();
     toast.success(result.message);
@@ -88,6 +92,7 @@ function SidebarContent({
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => onNavigate?.()}
                 className={cn(
                   "sidebar-force-white flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-white transition-colors",
                   active
@@ -137,7 +142,7 @@ export function Sidebar({ user }: { user: DashboardSidebarUser }) {
   return (
     <motion.aside
       animate={{ opacity: 1, x: 0 }}
-      className="sticky top-0 hidden h-screen w-[224px] shrink-0 bg-[linear-gradient(160deg,#000080_0%,#001f66_55%,#020b31_100%)] p-3 xl:w-[250px] xl:p-4 lg:flex lg:flex-col"
+      className="sticky top-0 hidden h-screen w-[224px] shrink-0 bg-[linear-gradient(160deg,#000080_0%,#001f66_55%,#020b31_100%)] p-3 xl:flex xl:flex-col xl:w-[250px] xl:p-4"
       initial={{ opacity: 0, x: -26 }}
       transition={{ duration: 0.42, ease: "easeOut" }}
     >
@@ -148,13 +153,18 @@ export function Sidebar({ user }: { user: DashboardSidebarUser }) {
 
 export function MobileSidebar({ user }: { user: DashboardSidebarUser }) {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   return (
-    <Dialog.Root>
+    <Dialog.Root onOpenChange={setOpen} open={open}>
       <Dialog.Trigger asChild>
         <Button
           aria-label="Open navigation menu"
-          className="h-11 w-11 rounded-2xl bg-white text-slate-700 hover:bg-slate-50 lg:hidden"
+          className="h-11 w-11 rounded-2xl bg-white text-slate-700 hover:bg-slate-50 xl:hidden"
           size="icon"
           variant="ghost"
         >
@@ -162,19 +172,24 @@ export function MobileSidebar({ user }: { user: DashboardSidebarUser }) {
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-[rgba(3,8,18,0.72)] backdrop-blur-sm lg:hidden" />
-        <Dialog.Content className="fixed inset-y-0 left-0 z-50 flex w-[88vw] max-w-[320px] flex-col overflow-y-auto bg-[linear-gradient(160deg,#000080_0%,#001f66_55%,#020b31_100%)] p-4 shadow-[0_30px_90px_rgba(3,8,18,0.45)] outline-none lg:hidden">
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-[rgba(3,8,18,0.72)] backdrop-blur-sm xl:hidden" />
+        <Dialog.Content className="fixed inset-y-0 left-0 z-50 flex w-[88vw] max-w-[320px] flex-col overflow-y-auto bg-[linear-gradient(160deg,#000080_0%,#001f66_55%,#020b31_100%)] p-4 shadow-[0_30px_90px_rgba(3,8,18,0.45)] outline-none xl:hidden">
           <div className="mb-4 flex items-center justify-between">
             <Dialog.Title className="text-sm font-semibold uppercase tracking-[0.24em] text-white">
               WorkLog Ultra
             </Dialog.Title>
             <Dialog.Close asChild>
-              <Button aria-label="Close navigation menu" className="h-11 w-11 rounded-2xl text-white" size="icon" variant="ghost">
-                <X className="h-5 w-5" />
+              <Button
+                aria-label="Close navigation menu"
+                className="h-11 w-11 rounded-2xl border border-white/35 bg-white/8 !text-white hover:bg-white/14 hover:!text-white"
+                size="icon"
+                variant="ghost"
+              >
+                <X className="h-5 w-5 !text-white" />
               </Button>
             </Dialog.Close>
           </div>
-          <SidebarContent mobile pathname={pathname} user={user} />
+          <SidebarContent mobile onNavigate={() => setOpen(false)} pathname={pathname} user={user} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

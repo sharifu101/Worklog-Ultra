@@ -61,9 +61,9 @@ export function TaskManageControls({
   const isRecurringTask = isRecurringTaskDescription(task.taskDescription);
   const isAlreadyMovedToHistory = isMovedToHistory(task.taskDescription);
   const editButtonClass =
-    "button-force-white h-8 rounded-full border border-white/20 px-3 text-xs font-semibold tracking-[0.01em] bg-gradient-to-r from-[#4f46e5] via-[#8b5cf6] to-[#ec4899] shadow-[0_10px_24px_rgba(99,102,241,0.32)] transition-all duration-200 hover:scale-[1.02] hover:from-[#4338ca] hover:via-[#7c3aed] hover:to-[#db2777] active:scale-95";
+    "button-force-white h-8 shrink-0 rounded-full border border-white/20 px-2.5 text-[10px] font-semibold tracking-[0.01em] bg-gradient-to-r from-[#4f46e5] via-[#8b5cf6] to-[#ec4899] shadow-[0_10px_24px_rgba(99,102,241,0.32)] transition-all duration-200 hover:scale-[1.02] hover:from-[#4338ca] hover:via-[#7c3aed] hover:to-[#db2777] active:scale-95 min-[420px]:px-3 min-[420px]:text-xs";
   const markDoneButtonClass =
-    "button-force-white h-8 rounded-full border border-white/20 px-3 text-xs font-semibold tracking-[0.01em] bg-gradient-to-r from-[#06b6d4] via-[#3b82f6] to-[#8b5cf6] shadow-[0_10px_24px_rgba(59,130,246,0.3)] hover:scale-[1.02] hover:from-[#0891b2] hover:via-[#2563eb] hover:to-[#7c3aed] transition-all duration-200 disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:hover:scale-100";
+    "button-force-white h-8 shrink-0 rounded-full border border-white/20 px-2.5 text-[10px] font-semibold tracking-[0.01em] bg-gradient-to-r from-[#06b6d4] via-[#3b82f6] to-[#8b5cf6] shadow-[0_10px_24px_rgba(59,130,246,0.3)] hover:scale-[1.02] hover:from-[#0891b2] hover:via-[#2563eb] hover:to-[#7c3aed] transition-all duration-200 disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:hover:scale-100 min-[420px]:px-3 min-[420px]:text-xs";
   const quickMoveButtonClass =
     "button-force-white h-8 w-8 rounded-full border border-white/20 bg-gradient-to-r from-[#0f766e] via-[#0f9f8a] to-[#14b8a6] p-0 text-white shadow-[0_10px_24px_rgba(20,184,166,0.28)] transition-all duration-200 hover:scale-[1.02] hover:from-[#115e59] hover:via-[#0f766e] hover:to-[#0d9488] active:scale-95 disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none disabled:hover:scale-100";
 
@@ -164,7 +164,7 @@ export function TaskManageControls({
   }
 
   return (
-    <div className={`flex flex-wrap items-center gap-2 ${compact ? "" : "mt-2"}`}>
+    <div className={`flex items-center gap-1 ${compact ? "shrink-0 flex-nowrap" : "mt-2 w-full flex-wrap gap-1.5"}`}>
       <Dialog.Root
         onOpenChange={(open) => {
           setEditOpen(open);
@@ -255,7 +255,7 @@ export function TaskManageControls({
         <Dialog.Root onOpenChange={setDeleteOpen} open={deleteOpen}>
           <Dialog.Trigger asChild>
             <Button
-              className="h-8 rounded-full px-3 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              className="h-8 shrink-0 rounded-full px-2.5 text-[10px] text-rose-600 hover:bg-rose-50 hover:text-rose-700 min-[420px]:px-3 min-[420px]:text-xs"
               size="sm"
               type="button"
               variant="outline"

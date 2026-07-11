@@ -583,15 +583,15 @@ export function DashboardWorkPlanSection({
 
   return (
     <>
-      <div className="overflow-hidden rounded-[28px] border border-[var(--panel-border)] bg-[var(--panel)] shadow-[var(--shadow)]" data-dashboard-panel>
-        <div className="flex flex-col gap-2 border-b border-[var(--panel-border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="overflow-hidden rounded-[24px] border border-[var(--panel-border)] bg-[var(--panel)] shadow-[var(--shadow)]" data-dashboard-panel>
+        <div className="flex flex-col gap-1.5 border-b border-[var(--panel-border)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4">
           <div>
-            <h2 className="text-xl font-bold text-[var(--foreground)]">Today&apos;s Work Plan</h2>
+            <h2 className="text-lg font-bold text-[var(--foreground)] sm:text-xl">Today&apos;s Work Plan</h2>
           </div>
-          <p className="text-sm font-medium text-[var(--muted-foreground)]">{formattedDate}</p>
+          <p className="text-xs font-medium text-[var(--muted-foreground)] sm:text-sm">{formattedDate}</p>
         </div>
 
-        <div className="space-y-1 p-3 sm:p-4">
+        <div className="space-y-2 p-2.5 sm:p-4">
           {visibleTasks.length ? (
             visibleTasks.map((task) => {
               const status = task.updates[0]?.status ?? "pending";
@@ -608,15 +608,15 @@ export function DashboardWorkPlanSection({
 
               return (
                 <article
-                  className={`group rounded-[22px] border p-3 transition ${surfaceTone.article}`}
+                  className={`group rounded-[18px] border p-3 transition sm:rounded-[22px] sm:p-4 ${surfaceTone.article}`}
                   data-dashboard-row
                   key={task.id}
                 >
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-start 2xl:justify-between">
-                      <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-col gap-2.5 sm:gap-3">
+                    <div className="flex flex-col gap-3 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(300px,24rem)] xl:items-start xl:gap-4">
+                      <div className="min-w-0 flex-1 space-y-1.5 sm:space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="break-words text-sm font-semibold leading-6 text-[var(--foreground)]">{task.taskTitle}</h3>
+                          <h3 className="break-words text-[0.92rem] font-semibold leading-5 text-[var(--foreground)] sm:text-sm sm:leading-6">{task.taskTitle}</h3>
                           {followUpMeta ? (
                             <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-violet-700">
                               Follow-up
@@ -628,7 +628,7 @@ export function DashboardWorkPlanSection({
                             </span>
                           ) : null}
                         </div>
-                        <p className="text-xs text-[var(--muted-foreground)]">{task.departmentName}</p>
+                        <p className="text-[11px] text-[var(--muted-foreground)] sm:text-xs">{task.departmentName}</p>
 
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span
@@ -639,11 +639,11 @@ export function DashboardWorkPlanSection({
                           <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${statusMeta.chip}`}>
                             {statusMeta.label}
                           </span>
-                          <span className={`text-xs font-semibold ${surfaceTone.time}`}>{formatPlannedTime(task)}</span>
+                          <span className={`text-[11px] font-semibold sm:text-xs ${surfaceTone.time}`}>{formatPlannedTime(task)}</span>
                         </div>
                       </div>
 
-                      <div className="w-full max-w-full 2xl:w-auto 2xl:max-w-[28rem] 2xl:shrink-0">
+                      <div className="w-full max-w-full xl:max-w-[24rem] xl:justify-self-end">
                         <TaskTimerActionWrapper
                           task={task}
                           canEdit={canEdit}
@@ -679,8 +679,8 @@ export function DashboardWorkPlanSection({
                     </div>
 
                     {taskDescription ? (
-                      <div className={`rounded-xl px-3 py-2 ${surfaceTone.note}`}>
-                        <p className="text-xs leading-6 text-slate-600 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                      <div className={`rounded-xl px-2.5 py-2 sm:px-3 ${surfaceTone.note}`}>
+                        <p className="text-[11px] leading-5 text-slate-600 whitespace-pre-wrap break-words [overflow-wrap:anywhere] sm:text-xs sm:leading-6">
                           {taskDescription}
                         </p>
                       </div>
@@ -690,14 +690,14 @@ export function DashboardWorkPlanSection({
               );
             })
           ) : (
-            <div className="rounded-2xl border border-dashed border-[var(--panel-border)] bg-[var(--panel-muted)] px-5 py-8 text-center text-sm text-[var(--muted-foreground)]">
+            <div className="rounded-2xl border border-dashed border-[var(--panel-border)] bg-[var(--panel-muted)] px-4 py-6 text-center text-[0.92rem] text-[var(--muted-foreground)] sm:px-5 sm:py-8 sm:text-sm">
               No tasks added yet for today. Start by creating today&apos;s work plan.
             </div>
           )}
         </div>
 
-        <div className="border-t border-[var(--panel-border)] px-5 py-3 text-center">
-          <Link className="text-sm font-semibold text-[#4f5ef7] hover:text-[#3f4ede]" href="/dashboard/plan">
+        <div className="border-t border-[var(--panel-border)] px-4 py-3 text-center sm:px-5">
+          <Link className="text-xs font-semibold text-[#4f5ef7] hover:text-[#3f4ede] sm:text-sm" href="/dashboard/plan">
             View All Tasks
           </Link>
         </div>
